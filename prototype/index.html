@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personal Finance</title>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- App styles -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ═══ SIDEBAR ═══════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">💰</div>
+      <div>
+        <span>Personal Finance</span>
+        <small>Quản lý tài chính</small>
+      </div>
+    </div>
+    <nav>
+      <div class="nav-section">
+        <div class="nav-label">Tổng quan</div>
+        <div class="nav-item active" data-page="dashboard">
+          <span class="nav-icon">📊</span> Dashboard
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Quản lý</div>
+        <div class="nav-item" data-page="transactions">
+          <span class="nav-icon">💸</span> Giao dịch
+        </div>
+        <div class="nav-item" data-page="categories">
+          <span class="nav-icon">🗂️</span> Danh mục
+        </div>
+        <div class="nav-item" data-page="budget">
+          <span class="nav-icon">🎯</span> Ngân sách
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Tài sản &amp; Báo cáo</div>
+        <div class="nav-item" data-page="assets">
+          <span class="nav-icon">🏦</span> Tài sản
+        </div>
+        <div class="nav-item" data-page="reports">
+          <span class="nav-icon">📈</span> Báo cáo
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-item" data-page="settings">
+          <span class="nav-icon">⚙️</span> Cài đặt
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="avatar">H</div>
+        <div class="user-info">
+          <div class="name">Hieu Nguyen</div>
+          <div class="email">hieu@example.com</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ════════════════════════════════════════════════ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="page-title" id="pageTitle">Dashboard</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary" onclick="openModal('addTxModal')">+ Giao dịch</button>
+        <button class="btn-icon" onclick="toggleDark()" title="Đổi theme">🌙</button>
+        <a href="login.html" class="btn-icon" title="Đăng xuất">🚪</a>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ─── PAGE: DASHBOARD ──────────────────────────────── -->
+      <section class="page active" id="page-dashboard">
+        <div class="section-header">
+          <div>
+            <div class="text-muted" style="font-size:13px">Tháng 2, 2026</div>
+          </div>
+          <div style="text-align:right">
+            <div class="text-muted" style="font-size:12px">Số dư hiện tại</div>
+            <div style="font-size:22px;font-weight:700;color:var(--primary)">52.350.000 đ</div>
+          </div>
+        </div>
+
+        <div class="grid-3 mb-16">
+          <div class="card" style="border-left:4px solid var(--success)">
+            <div class="card-title">Tổng thu</div>
+            <div class="card-value text-success">18.000.000 đ</div>
+            <div class="card-sub"><span class="trend up">↑ 5%</span> so với tháng trước</div>
+          </div>
+          <div class="card" style="border-left:4px solid var(--danger)">
+            <div class="card-title">Tổng chi</div>
+            <div class="card-value text-danger">10.450.000 đ</div>
+            <div class="card-sub"><span class="trend down">↑ 12%</span> so với tháng trước</div>
+          </div>
+          <div class="card" style="border-left:4px solid var(--primary)">
+            <div class="card-title">Chênh lệch</div>
+            <div class="card-value text-success">+7.550.000 đ</div>
+            <div class="card-sub">Tiết kiệm tháng này</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Thu chi 6 tháng gần đây</div>
+            </div>
+            <div class="chart-wrap" style="height:220px"><canvas id="dashChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Giao dịch gần đây</div>
+              <button class="btn btn-sm btn-outline" onclick="navigate('transactions')">Xem tất cả</button>
+            </div>
+            <div id="recentTxList"></div>
+          </div>
+        </div>
+
+        <div class="grid-2 mt-16">
+          <div class="card">
+            <div class="section-title" style="margin-bottom:12px">Top 5 khoản chi lớn nhất</div>
+            <div id="topExpList"></div>
+          </div>
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Tiến độ ngân sách</div>
+              <button class="btn btn-sm btn-outline" onclick="navigate('budget')">Chi tiết</button>
+            </div>
+            <div style="margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+                <span>Tổng chi / Ngân sách</span><strong>10,45M / 15M</strong>
+              </div>
+              <div class="progress-wrap"><div class="progress-bar safe" style="width:70%"></div></div>
+              <div class="text-muted" style="font-size:11px;margin-top:4px">Đã dùng 70% — còn lại 4.550.000 đ</div>
+            </div>
+            <hr class="divider">
+            <div id="dashBudgetList"></div>
+          </div>
+        </div>
+
+        <div class="card mt-16">
+          <div class="section-header">
+            <div class="section-title">Tài sản ròng (Net Worth)</div>
+            <button class="btn btn-sm btn-outline" onclick="navigate('assets')">Quản lý tài sản</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap">
+            <div>
+              <div class="text-muted" style="font-size:12px">Giá trị ròng</div>
+              <div style="font-size:32px;font-weight:800;color:var(--primary)">1.823.500.000 đ</div>
+              <span class="badge badge-success">↑ 3.2% so với tháng trước</span>
+            </div>
+            <div style="flex:1;min-width:200px;height:140px">
+              <canvas id="networthMiniChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── PAGE: TRANSACTIONS ───────────────────────────── -->
+      <section class="page" id="page-transactions">
+        <div class="section-header mb-16">
+          <div class="stat-row" style="margin:0">
+            <div class="stat-chip"><strong>32</strong> giao dịch</div>
+            <div class="stat-chip">Thu: <strong class="text-success">18.000.000 đ</strong></div>
+            <div class="stat-chip">Chi: <strong class="text-danger">10.450.000 đ</strong></div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('addTxModal')">+ Thêm giao dịch</button>
+        </div>
+
+        <div class="card mb-16" style="padding:14px">
+          <div class="filter-bar">
+            <input type="search" placeholder="🔍 Tìm kiếm..." id="txSearch" oninput="filterTransactions()" style="min-width:200px">
+            <select id="txTypeFilter" onchange="filterTransactions()">
+              <option value="">Tất cả loại</option>
+              <option value="expense">Chi tiêu</option>
+              <option value="income">Thu nhập</option>
+            </select>
+            <select id="txCatFilter" onchange="filterTransactions()">
+              <option value="">Tất cả danh mục</option>
+              <option>Ăn uống</option><option>Di chuyển</option>
+              <option>Giải trí</option><option>Mua sắm</option>
+              <option>Nhà ở</option><option>Lương</option><option>Đầu tư</option>
+            </select>
+            <select id="txMonthFilter" onchange="filterTransactions()">
+              <option value="">Tất cả tháng</option>
+              <option value="2" selected>Tháng 2/2026</option>
+              <option value="1">Tháng 1/2026</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card" style="padding:12px 16px">
+          <div id="txListWrap"></div>
+        </div>
+      </section>
+
+      <!-- ─── PAGE: CATEGORIES ─────────────────────────────── -->
+      <section class="page" id="page-categories">
+        <div class="section-header mb-16">
+          <div></div>
+          <button class="btn btn-primary" onclick="openModal('addCatModal')">+ Thêm danh mục</button>
+        </div>
+        <div class="tabs" id="catTabs">
+          <div class="tab active" onclick="switchCatTab('expense', this)">Chi tiêu</div>
+          <div class="tab"        onclick="switchCatTab('income',  this)">Thu nhập</div>
+        </div>
+        <div id="catListWrap"></div>
+      </section>
+
+      <!-- ─── PAGE: BUDGET ─────────────────────────────────── -->
+      <section class="page" id="page-budget">
+        <div class="grid-4 mb-16">
+          <div class="card"><div class="card-title">Ngân sách tháng</div><div class="card-value">15.000.000 đ</div></div>
+          <div class="card"><div class="card-title">Đã chi</div><div class="card-value text-danger">10.450.000 đ</div></div>
+          <div class="card"><div class="card-title">Còn lại</div><div class="card-value text-success">4.550.000 đ</div></div>
+          <div class="card"><div class="card-title">Đã dùng</div><div class="card-value">70%</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Chi tiết theo danh mục</div>
+              <button class="btn btn-sm btn-outline" onclick="openModal('addBudgetModal')">+ Đặt ngân sách</button>
+            </div>
+            <div id="budgetList"></div>
+          </div>
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Ngân sách vs Thực tế</div>
+            <div class="chart-wrap" style="height:300px"><canvas id="budgetChart"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── PAGE: ASSETS ──────────────────────────────────── -->
+      <section class="page" id="page-assets">
+        <div class="card mb-16" style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none">
+          <div style="font-size:13px;opacity:.8;margin-bottom:4px">Giá trị tài sản ròng</div>
+          <div style="font-size:36px;font-weight:800;margin-bottom:8px">1.823.500.000 đ</div>
+          <div style="display:flex;gap:24px;flex-wrap:wrap">
+            <div><div style="font-size:11px;opacity:.7">Tổng tài sản</div><div style="font-weight:700">2.023.500.000 đ</div></div>
+            <div><div style="font-size:11px;opacity:.7">Tổng nợ</div><div style="font-weight:700">200.000.000 đ</div></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-header"><div class="section-title">Phân bổ tài sản</div></div>
+            <div class="chart-wrap" style="height:260px"><canvas id="assetPieChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="section-header"><div class="section-title">Biến động Net Worth</div></div>
+            <div class="chart-wrap" style="height:260px"><canvas id="networthChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card mt-16">
+          <div class="section-header">
+            <div class="section-title">Danh sách tài sản</div>
+            <button class="btn btn-primary btn-sm" onclick="openModal('addAssetModal')">+ Thêm tài sản</button>
+          </div>
+          <div class="tabs" id="assetTabs">
+            <div class="tab active" onclick="switchAssetTab('cash',    this)">💵 Tiền mặt</div>
+            <div class="tab"        onclick="switchAssetTab('gold',    this)">🥇 Vàng</div>
+            <div class="tab"        onclick="switchAssetTab('stock',   this)">📈 Cổ phiếu</div>
+            <div class="tab"        onclick="switchAssetTab('savings', this)">🏛️ Tiết kiệm</div>
+            <div class="tab"        onclick="switchAssetTab('debt',    this)">💳 Nợ</div>
+          </div>
+          <div id="assetListWrap"></div>
+        </div>
+      </section>
+
+      <!-- ─── PAGE: REPORTS ──────────────────────────────────── -->
+      <section class="page" id="page-reports">
+        <div class="section-header mb-16">
+          <div class="period-btns">
+            <div class="period-btn"        onclick="setPeriod(this)">Tuần này</div>
+            <div class="period-btn active" onclick="setPeriod(this)">Tháng này</div>
+            <div class="period-btn"        onclick="setPeriod(this)">Quý này</div>
+            <div class="period-btn"        onclick="setPeriod(this)">Năm nay</div>
+          </div>
+          <button class="btn btn-outline btn-sm">⬇ Xuất báo cáo</button>
+        </div>
+
+        <div class="tabs" id="reportTabs">
+          <div class="tab active" onclick="switchReportTab('overview',  this)">Tổng quan</div>
+          <div class="tab"        onclick="switchReportTab('category',  this)">Theo danh mục</div>
+          <div class="tab"        onclick="switchReportTab('trend',     this)">Xu hướng</div>
+          <div class="tab"        onclick="switchReportTab('annual',    this)">Báo cáo năm</div>
+        </div>
+
+        <!-- Overview -->
+        <div id="report-overview">
+          <div class="grid-3 mb-16">
+            <div class="card"><div class="card-title">Tổng thu</div><div class="card-value text-success">18.000.000 đ</div><div class="card-sub">12 giao dịch</div></div>
+            <div class="card"><div class="card-title">Tổng chi</div><div class="card-value text-danger">10.450.000 đ</div><div class="card-sub">20 giao dịch</div></div>
+            <div class="card"><div class="card-title">Tiết kiệm</div><div class="card-value text-primary">7.550.000 đ</div><div class="card-sub">Tỷ lệ tiết kiệm 42%</div></div>
+          </div>
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Thu chi theo tháng</div>
+            <div class="chart-wrap" style="height:260px"><canvas id="reportBarChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Category -->
+        <div id="report-category" style="display:none">
+          <div class="grid-2">
+            <div class="card">
+              <div class="section-title" style="margin-bottom:16px">Chi tiêu theo danh mục</div>
+              <div class="chart-wrap" style="height:280px"><canvas id="reportPieChart"></canvas></div>
+            </div>
+            <div class="card">
+              <div class="section-title" style="margin-bottom:12px">Chi tiết</div>
+              <div class="table-wrap">
+                <table><thead><tr><th>Danh mục</th><th>Số tiền</th><th>%</th></tr></thead>
+                <tbody id="catReportTable"></tbody></table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trend -->
+        <div id="report-trend" style="display:none">
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Xu hướng thu chi 6 tháng</div>
+              <div class="period-btns">
+                <div class="period-btn active" onclick="setPeriod(this)">6 tháng</div>
+                <div class="period-btn"        onclick="setPeriod(this)">12 tháng</div>
+              </div>
+            </div>
+            <div class="chart-wrap" style="height:280px"><canvas id="trendChart"></canvas></div>
+          </div>
+          <div class="card mt-16">
+            <div class="section-title" style="margin-bottom:12px">Top 10 giao dịch lớn nhất</div>
+            <div class="table-wrap">
+              <table><thead><tr><th>#</th><th>Danh mục</th><th>Ghi chú</th><th>Ngày</th><th>Số tiền</th></tr></thead>
+              <tbody id="topTxTable"></tbody></table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Annual -->
+        <div id="report-annual" style="display:none">
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Thu chi theo tháng — Năm 2026</div>
+            <div class="chart-wrap" style="height:280px"><canvas id="annualChart"></canvas></div>
+          </div>
+          <div class="card mt-16">
+            <div class="section-title" style="margin-bottom:12px">Tổng hợp năm 2026</div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Tháng</th><th>Thu nhập</th><th>Chi tiêu</th><th>Chênh lệch</th></tr></thead>
+              <tbody id="annualTable"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── PAGE: SETTINGS ─────────────────────────────────── -->
+      <section class="page" id="page-settings">
+        <div class="settings-section">
+          <div class="settings-title">💳 Quản lý ví / Tài khoản</div>
+          <div id="walletList"></div>
+          <button class="btn btn-outline btn-sm mt-16" onclick="openModal('addWalletModal')">+ Thêm ví mới</button>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-title">⚙️ Cài đặt chung</div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Đơn vị tiền tệ</div>
+              <div class="desc">Đơn vị hiển thị cho tất cả số tiền</div>
+            </div>
+            <select style="width:120px"><option selected>VND</option><option>USD</option><option>EUR</option></select>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Giao diện tối (Dark Mode)</div>
+              <div class="desc">Chuyển sang giao diện tối</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="darkCheckbox" onchange="toggleDarkFromCheckbox(this)">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Thông báo ngân sách</div>
+              <div class="desc">Cảnh báo khi đạt 80% và 100% ngân sách</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Ngôn ngữ</div>
+              <div class="desc">Ngôn ngữ hiển thị của ứng dụng</div>
+            </div>
+            <select style="width:140px"><option selected>🇻🇳 Tiếng Việt</option><option>🇺🇸 English</option></select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-title">💾 Sao lưu &amp; Khôi phục</div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Sao lưu dữ liệu</div>
+              <div class="desc">Tải xuống file JSON chứa toàn bộ dữ liệu</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="alert('Tải xuống backup.json (Demo)')">⬇ Sao lưu</button>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Khôi phục dữ liệu</div>
+              <div class="desc">Khôi phục từ file backup đã tải</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="alert('Chọn file backup để khôi phục (Demo)')">⬆ Khôi phục</button>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Thống kê dữ liệu</div>
+              <div class="desc">24 giao dịch · 24 danh mục · 8 tài sản · 3 ví</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-title">👤 Tài khoản</div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Hieu Nguyen</div>
+              <div class="desc">hieu@example.com</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="alert('Sửa hồ sơ cá nhân (Demo)')">Sửa hồ sơ</button>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Đổi mật khẩu</div>
+              <div class="desc">Thay đổi mật khẩu đăng nhập</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="alert('Đổi mật khẩu (Demo)')">Đổi mật khẩu</button>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-label">
+              <div class="title">Đăng xuất</div>
+              <div class="desc">Thoát khỏi tài khoản hiện tại</div>
+            </div>
+            <a href="login.html" class="btn btn-outline btn-sm">🚪 Đăng xuất</a>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-title">⚠️ Vùng nguy hiểm</div>
+          <div class="danger-zone">
+            <div class="danger-title">Xóa toàn bộ dữ liệu</div>
+            <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
+              Hành động này không thể hoàn tác. Toàn bộ giao dịch, danh mục và tài sản sẽ bị xóa vĩnh viễn.
+            </p>
+            <button class="btn btn-danger btn-sm" onclick="alert('Demo: Tính năng này sẽ yêu cầu xác nhận mật khẩu và gõ XÓA để thực hiện.')">
+              🗑️ Xóa toàn bộ dữ liệu
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+  </main>
+</div><!-- /app -->
+
+<!-- ═══ BOTTOM NAV ═══════════════════════════════════════════ -->
+<nav class="bottom-nav">
+  <div class="bnav-item active" data-page="dashboard">   <div class="bnav-icon">📊</div>Dashboard</div>
+  <div class="bnav-item"        data-page="transactions"><div class="bnav-icon">💸</div>Giao dịch</div>
+  <div class="bnav-item"        data-page="budget">      <div class="bnav-icon">🎯</div>Ngân sách</div>
+  <div class="bnav-item"        data-page="assets">      <div class="bnav-icon">🏦</div>Tài sản</div>
+  <div class="bnav-item"        data-page="settings">    <div class="bnav-icon">⚙️</div>Cài đặt</div>
+</nav>
+
+<!-- ═══ MODALS ════════════════════════════════════════════════ -->
+
+<!-- Thêm Giao Dịch -->
+<div class="modal-overlay" id="addTxModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Thêm giao dịch mới</div>
+      <button class="btn-icon" onclick="closeModal('addTxModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <div class="type-toggle">
+          <div class="type-btn active expense" onclick="setTxType('expense', this)">📤 Chi tiêu</div>
+          <div class="type-btn income"         onclick="setTxType('income',  this)">📥 Thu nhập</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Số tiền (đ)</label>
+        <input type="number" placeholder="0" id="txAmount" min="0">
+      </div>
+      <div class="form-group">
+        <label>Danh mục</label>
+        <select id="txCat">
+          <optgroup label="Chi tiêu">
+            <option>Ăn uống</option><option>Di chuyển</option><option>Giải trí</option>
+            <option>Mua sắm</option><option>Nhà ở</option><option>Y tế</option><option>Giáo dục</option>
+          </optgroup>
+          <optgroup label="Thu nhập">
+            <option>Lương</option><option>Thưởng</option><option>Freelance</option><option>Đầu tư</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ngày</label>
+        <input type="date" id="txDate">
+      </div>
+      <div class="form-group">
+        <label>Ví</label>
+        <select>
+          <option>💵 Tiền mặt — 5.350.000 đ</option>
+          <option>🏦 Techcombank — 47.000.000 đ</option>
+          <option>📱 MoMo — 1.500.000 đ</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ghi chú (tùy chọn)</label>
+        <input type="text" placeholder="Ví dụ: Cà phê buổi sáng">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('addTxModal')">Hủy</button>
+      <button class="btn btn-primary" onclick="saveTx()">Lưu giao dịch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Thêm Danh Mục -->
+<div class="modal-overlay" id="addCatModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Thêm danh mục mới</div>
+      <button class="btn-icon" onclick="closeModal('addCatModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Loại</label>
+        <div class="type-toggle">
+          <div class="type-btn active expense" onclick="setTxType('expense', this)">Chi tiêu</div>
+          <div class="type-btn income"         onclick="setTxType('income',  this)">Thu nhập</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nhóm cha</label>
+        <select><option>Thiết yếu</option><option>Sinh hoạt</option><option>Giải trí</option><option>Tài chính</option><option>Xã hội</option><option>Khác</option></select>
+      </div>
+      <div class="form-group">
+        <label>Tên danh mục</label>
+        <input type="text" placeholder="Nhập tên danh mục...">
+      </div>
+      <div class="form-group">
+        <label>Icon</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span style="font-size:22px;cursor:pointer">🍜</span><span style="font-size:22px;cursor:pointer">🚗</span>
+          <span style="font-size:22px;cursor:pointer">🏠</span><span style="font-size:22px;cursor:pointer">🎮</span>
+          <span style="font-size:22px;cursor:pointer">👕</span><span style="font-size:22px;cursor:pointer">💊</span>
+          <span style="font-size:22px;cursor:pointer">📚</span><span style="font-size:22px;cursor:pointer">✈️</span>
+          <span style="font-size:22px;cursor:pointer">💰</span><span style="font-size:22px;cursor:pointer">🎁</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Màu sắc</label>
+        <div style="display:flex;gap:8px">
+          <div style="width:28px;height:28px;border-radius:50%;background:#ef4444;cursor:pointer;border:2px solid transparent"></div>
+          <div style="width:28px;height:28px;border-radius:50%;background:#f97316;cursor:pointer"></div>
+          <div style="width:28px;height:28px;border-radius:50%;background:#eab308;cursor:pointer"></div>
+          <div style="width:28px;height:28px;border-radius:50%;background:#22c55e;cursor:pointer"></div>
+          <div style="width:28px;height:28px;border-radius:50%;background:#3b82f6;cursor:pointer"></div>
+          <div style="width:28px;height:28px;border-radius:50%;background:#8b5cf6;cursor:pointer"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('addCatModal')">Hủy</button>
+      <button class="btn btn-primary" onclick="closeModal('addCatModal');alert('✅ Đã thêm danh mục!')">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Đặt Ngân Sách -->
+<div class="modal-overlay" id="addBudgetModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Đặt ngân sách tháng</div>
+      <button class="btn-icon" onclick="closeModal('addBudgetModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Tháng</label>
+        <select><option selected>Tháng 2 / 2026</option><option>Tháng 3 / 2026</option></select>
+      </div>
+      <div class="form-group">
+        <label>Ngân sách tổng (đ)</label>
+        <input type="number" value="15000000">
+      </div>
+      <div class="form-group">
+        <label>Ngân sách từng danh mục</label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:120px">🍜 Ăn uống</span><input type="number" value="3000000" style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:120px">🚗 Di chuyển</span><input type="number" value="1500000" style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:120px">🎮 Giải trí</span><input type="number" value="1000000" style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:120px">👕 Mua sắm</span><input type="number" value="2000000" style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:120px">🏠 Nhà ở</span><input type="number" value="5000000" style="flex:1"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" checked style="width:auto"> Sao chép từ tháng trước
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('addBudgetModal')">Hủy</button>
+      <button class="btn btn-primary" onclick="closeModal('addBudgetModal');alert('✅ Đã lưu ngân sách!')">Lưu ngân sách</button>
+    </div>
+  </div>
+</div>
+
+<!-- Thêm Tài Sản -->
+<div class="modal-overlay" id="addAssetModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Thêm tài sản mới</div>
+      <button class="btn-icon" onclick="closeModal('addAssetModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Loại tài sản</label>
+        <select>
+          <option>💵 Tiền mặt / Ngân hàng</option><option>🥇 Vàng</option>
+          <option>📈 Cổ phiếu</option><option>🏛️ Tiết kiệm</option>
+          <option>🏠 Bất động sản</option><option>💳 Nợ phải trả</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Tên</label><input type="text" placeholder="Ví dụ: Techcombank, Vàng SJC..."></div>
+      <div class="form-group"><label>Giá trị / Số dư (đ)</label><input type="number" placeholder="0"></div>
+      <div class="form-group"><label>Ghi chú</label><textarea rows="2" placeholder="Ghi chú thêm..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('addAssetModal')">Hủy</button>
+      <button class="btn btn-primary" onclick="closeModal('addAssetModal');alert('✅ Đã thêm tài sản!')">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Thêm Ví -->
+<div class="modal-overlay" id="addWalletModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Thêm ví mới</div>
+      <button class="btn-icon" onclick="closeModal('addWalletModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Tên ví</label><input type="text" placeholder="Ví dụ: Tiền mặt, VCB..."></div>
+      <div class="form-group">
+        <label>Loại ví</label>
+        <select><option>💵 Tiền mặt</option><option>🏦 Ngân hàng</option><option>📱 Ví điện tử</option></select>
+      </div>
+      <div class="form-group"><label>Số dư ban đầu (đ)</label><input type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('addWalletModal')">Hủy</button>
+      <button class="btn btn-primary" onclick="closeModal('addWalletModal');alert('✅ Đã thêm ví!')">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCRIPTS ═══════════════════════════════════════════════ -->
+<script src="js/data.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
