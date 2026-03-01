@@ -138,6 +138,33 @@ export interface PaginatedResponse<T> {
   meta: PaginationMeta
 }
 
+export interface RecurringTemplate {
+  id: string
+  userId: string
+  type: TransactionType
+  amount: number // cents
+  categoryId: string
+  walletId: string
+  note: string | null
+  interval: RecurrenceInterval
+  startDate: string
+  endDate: string | null
+  lastGeneratedDate: string | null
+  isActive: boolean
+  createdAt: string
+}
+
+export interface RecurringWithRelations extends RecurringTemplate {
+  category: Category
+  wallet: Wallet
+}
+
+export interface TransactionSummary {
+  totalIncome: number // cents
+  totalExpense: number // cents
+  totalBalance: number // cents
+}
+
 export interface ApiError {
   error: {
     message: string

@@ -5,6 +5,7 @@ import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import SettingsPage from './pages/SettingsPage'
+import TransactionsPage from './pages/TransactionsPage'
 
 export default function App() {
   return (
@@ -19,6 +20,9 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/transactions/new" element={<TransactionsPage />} />
+            <Route path="/transactions/:id/edit" element={<TransactionsPage />} />
           </Route>
         </Route>
       </Routes>

@@ -51,7 +51,7 @@ export const createTransactionSchema = z.object({
   isRecurring: z.boolean().default(false),
 })
 
-export const updateTransactionSchema = createTransactionSchema.partial()
+export const updateTransactionSchema = createTransactionSchema.omit({ type: true }).partial()
 
 export const transactionFilterSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']).optional(),
@@ -59,9 +59,28 @@ export const transactionFilterSchema = z.object({
   walletId: z.string().uuid().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
+  search: z.string().optional(),
+  amountFrom: z.coerce.number().int().optional(),
+  amountTo: z.coerce.number().int().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 })
+
+export const createRecurringSchema = z.object({
+  type: z.enum(['income', 'expense', 'transfer']),
+  amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
+  categoryId: z.string().uuid('Category ID không hợp lệ'),
+  walletId: z.string().uuid('Wallet ID không hợp lệ'),
+  note: z.string().max(500).optional(),
+  interval: z.enum(['weekly', 'monthly', 'yearly']),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày: YYYY-MM-DD'),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+})
+
+export const updateRecurringSchema = createRecurringSchema
+  .pick({ amount: true, note: true, endDate: true })
+  .extend({ isActive: z.boolean().optional() })
+  .partial()
 
 // ═══════════════════════════════════════════════════════════
 // Category schemas
@@ -139,6 +158,8 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>
 export type TransactionFilter = z.infer<typeof transactionFilterSchema>
+export type CreateRecurringInput = z.infer<typeof createRecurringSchema>
+export type UpdateRecurringInput = z.infer<typeof updateRecurringSchema>
 export type CreateCategoryGroupInput = z.infer<typeof createCategoryGroupSchema>
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>

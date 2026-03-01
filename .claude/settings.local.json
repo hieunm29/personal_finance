@@ -28,7 +28,8 @@
       "Bash(export:*)",
       "Bash(node:*)",
       "Bash(mkdir:*)",
-      "mcp__supabase__search_docs"
+      "mcp__supabase__search_docs",
+      "Bash(bun:*)"
     ]
   },
   "enabledMcpjsonServers": [

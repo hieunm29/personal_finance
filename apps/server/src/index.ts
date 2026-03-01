@@ -37,7 +37,14 @@ app.use('/api/*', async (c, next) => {
 
 // Routes
 import settingsRoutes from './routes/settings'
+import transactionRoutes from './routes/transactions'
+import categoriesRoutes from './routes/categories'
+import walletsRoutes from './routes/wallets'
+
 app.route('/api/settings', settingsRoutes)
+app.route('/api/transactions', transactionRoutes)
+app.route('/api/categories', categoriesRoutes)
+app.route('/api/wallets', walletsRoutes)
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {

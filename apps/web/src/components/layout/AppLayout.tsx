@@ -28,6 +28,14 @@ export default function AppLayout() {
             Dashboard
           </NavLink>
           <NavLink
+            to="/transactions"
+            className={({ isActive }) =>
+              `rounded-md px-3 py-2 text-sm font-medium ${isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`
+            }
+          >
+            Giao dịch
+          </NavLink>
+          <NavLink
             to="/settings"
             className={({ isActive }) =>
               `rounded-md px-3 py-2 text-sm font-medium ${isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`
