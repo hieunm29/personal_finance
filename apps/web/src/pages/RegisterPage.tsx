@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { signUpSchema, type SignUpInput } from '@pf/shared'
 import { authClient } from '../lib/auth-client'
 
 export default function RegisterPage() {
-  const navigate = useNavigate()
   const [serverError, setServerError] = useState('')
 
   const {
@@ -34,7 +33,8 @@ export default function RegisterPage() {
       return
     }
 
-    navigate('/')
+    // Full reload để better-auth session state được đọc fresh
+    window.location.href = '/'
   }
 
   return (
