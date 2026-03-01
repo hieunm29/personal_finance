@@ -1,0 +1,22 @@
+# MCP config (contains credentials)
+.mcp.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# SQLite data
+data/
+*.db
+*.db-journal
+*.db-wal
+
+# Logs
+*.log

@@ -1,7 +1,39 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm:*)"
+      "Bash(npm:*)",
+      "mcp__github__search_repositories",
+      "Bash(npx:*)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__execute_sql",
+      "Bash(/Users/hieu/.bun/bin/bun install:*)",
+      "Bash(/Users/hieu/.bun/bin/bun run:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)",
+      "mcp__supabase__get_publishable_keys",
+      "Bash(bun run:*)",
+      "Bash(~/.bun/bin/bun run:*)",
+      "Bash(~/.bun/bin/bun:*)",
+      "Bash(PGPASSWORD='CGv4QdNfW5uFoSdd' psql:*)",
+      "WebSearch",
+      "WebFetch(domain:www.better-auth.com)",
+      "WebFetch(domain:catalins.tech)",
+      "WebFetch(domain:github.com)",
+      "Bash(bun remove:*)",
+      "Bash(export:*)",
+      "Bash(node:*)",
+      "Bash(mkdir:*)",
+      "mcp__supabase__search_docs"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "supabase",
+    "github",
+    "playwright"
+  ]
 }

@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      target: deps
+    ports:
+      - "3000:3000"
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:./data/app.db
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - BETTER_AUTH_URL=http://localhost:3000
+      - FRONTEND_URL=http://localhost:5173
+      - PORT=3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: bun run dev

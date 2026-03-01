@@ -1,0 +1,16 @@
+{
+  "name": "personal-finance",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --filter './apps/*' dev",
+    "dev:web": "bun run --filter './apps/web' dev",
+    "dev:server": "bun run --filter './apps/server' dev",
+    "build": "bun run --filter './apps/web' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "db:generate": "bun run --filter './apps/server' db:generate",
+    "db:migrate": "bun run --filter './apps/server' db:migrate",
+    "db:studio": "bun run --filter './apps/server' db:studio",
+    "db:seed": "bun run --filter './apps/server' db:seed"
+  }
+}

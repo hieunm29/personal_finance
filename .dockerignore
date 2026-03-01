@@ -1,0 +1,12 @@
+node_modules
+.env
+.env.local
+data/*.db
+data/*.db-journal
+data/*.db-wal
+.git
+dist
+*.log
+.claude
+memory-bank
+.agents

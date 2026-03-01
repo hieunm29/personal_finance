@@ -1,119 +1,121 @@
 # Mẫu Hệ thống (System Patterns)
 
-## Kiến trúc Hệ thống (Dự kiến)
+## Kiến trúc Thực tế
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   FRONTEND (SPA)                    │
-│  Dashboard · Transactions · Budget · Assets · ...   │
-└───────────────────┬─────────────────────────────────┘
-                    │ REST API / JSON
-┌───────────────────▼─────────────────────────────────┐
-│                    BACKEND                           │
-│   Auth · Transaction Engine · Budget · Asset ...    │
-└───────────────────┬─────────────────────────────────┘
-                    │
-┌───────────────────▼─────────────────────────────────┐
-│                   DATABASE                           │
-│  users · wallets · categories · transactions        │
-│  budgets · assets · asset_snapshots                 │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         BROWSER                              │
+│  React 19 · Vite 6 · TailwindCSS 4 · React Router 7         │
+│  TanStack Query (server state) · Zustand (UI state)          │
+│  @supabase/supabase-js (Auth trực tiếp)                      │
+└────────────┬──────────────────────────────┬──────────────────┘
+             │ fetch /api/*                 │ Supabase Auth SDK
+             │ Authorization: Bearer JWT   │ (signUp, signIn)
+             ▼                              ▼
+┌────────────────────────┐   ┌─────────────────────────────────┐
+│   VERCEL SERVERLESS    │   │         SUPABASE AUTH           │
+│   Hono 4 · /api/*      │   │  JWT · refresh token · sessions │
+│   logger→cors→auth     │   └─────────────────────────────────┘
+│   →zod-validator        │
+│   →route handler        │
+│   →Drizzle ORM          │
+└────────────┬────────────┘
+             │ postgres-js (DATABASE_URL)
+             ▼
+┌────────────────────────────────────────────────────────────┐
+│                  SUPABASE PostgreSQL                        │
+│  user_profiles · category_groups · categories · wallets    │
+│  transactions · recurring_templates · budgets              │
+│  category_budgets · assets · asset_history                 │
+└────────────────────────────────────────────────────────────┘
 ```
 
-## Các Mẫu Thiết kế (từ Prototype)
-
-### Navigation Pattern — SPA
-- **Desktop**: Sidebar cố định bên trái (240px), content bên phải.
-- **Mobile**: Bottom navigation bar (5 tab), sidebar ẩn đi.
-- Page switching: show/hide `<section class="page">` bằng JS — không reload.
-
-### Data Layer Pattern
-- Dữ liệu mẫu tập trung trong `js/data.js` (CATEGORIES, TRANSACTIONS, BUDGETS, ASSETS, WALLETS).
-- Format tiền VND: `new Intl.NumberFormat('vi-VN').format(n) + ' đ'`.
-- Khi chuyển sang app thực: thay `data.js` bằng API calls.
-
-### Chart Pattern
-- Mỗi biểu đồ có một `<canvas id="...">` riêng.
-- `safeChart(id, config)` — destroy chart cũ trước khi tạo mới (tránh memory leak).
-- Charts khởi tạo lazy: chỉ render khi navigate tới trang đó (`setTimeout(..., 50)`).
-
-### Theme Pattern
-- Dark mode dùng CSS `[data-theme="dark"]` + CSS Custom Properties.
-- Toggle bằng `document.documentElement.setAttribute('data-theme', ...)`.
-- Đồng bộ giữa topbar button và settings checkbox.
-
-### Modal Pattern
-- Mỗi modal là `<div class="modal-overlay" id="...">`.
-- `openModal(id)` / `closeModal(id)` thêm/bớt class `.open`.
-- Đóng modal khi click overlay hoặc phím Escape.
-
-## Cấu trúc Dữ liệu Chính (Domain Model)
-
-### Transaction
-```js
-{
-  id, type: 'income'|'expense',
-  cat, icon, color,
-  amount,       // VND, số dương
-  note,
-  date,         // 'YYYY-MM-DD'
-  month,        // number
-  wallet_id
-}
-```
-
-### Category (2 cấp)
-```js
-// Nhóm → Danh mục con
-CATEGORIES.expense['Thiết yếu'] = [
-  { id, name, icon, color }
-]
-```
-
-### Budget
-```js
-{ cat, icon, color, limit, spent }
-// Cảnh báo tại 80% và 100%
-```
-
-### Asset
-```js
-{
-  name, icon, bg, value,
-  note,
-  isDebt?: boolean  // true → trừ vào Net Worth
-}
-// Net Worth = Σ(tài sản) - Σ(nợ)
-```
-
-### Wallet
-```js
-{ name, icon, bg, balance, isDefault }
-// Chuyển tiền nội bộ không tính vào thu/chi
-```
-
-## Mối Quan hệ giữa các Thành phần
+## Monorepo Structure
 
 ```
-User ──1:N──▶ Wallet
-User ──1:N──▶ Category (custom, kế thừa preset)
-User ──1:N──▶ Transaction ──M:1──▶ Category
-                          └──M:1──▶ Wallet
-User ──1:N──▶ Budget ──M:1──▶ Category (expense only)
-User ──1:N──▶ Asset
+Personal_Finance/
+├── CLAUDE.md                    # Project rules cho Claude
+├── package.json                 # Bun workspaces root
+├── tsconfig.json                # TypeScript base config
+├── bunfig.toml                  # Bun config
+├── vercel.json                  # Deploy config
+├── .env / .env.example          # Env vars
+├── api/
+│   └── index.ts                 # Vercel serverless entry (hono/vercel)
+├── packages/
+│   └── shared/                  # @pf/shared — dùng chung FE/BE
+│       └── src/
+│           ├── types/index.ts   # TypeScript interfaces (khớp DB schema)
+│           ├── schemas/index.ts # Zod validation schemas
+│           └── constants/index.ts # QUERY_KEYS, ROUTES, enums
+├── apps/
+│   ├── web/                     # @pf/web — React + Vite
+│   │   ├── vite.config.ts       # Proxy /api → :3000, envDir → root
+│   │   └── src/
+│   │       ├── App.tsx          # Entry, router, auth guard
+│   │       ├── main.tsx         # ReactDOM + QueryClientProvider
+│   │       ├── index.css        # @import "tailwindcss" + @theme
+│   │       └── services/
+│   │           ├── supabase.ts  # Supabase client init
+│   │           └── apiClient.ts # fetch wrapper với auth header
+│   └── server/                  # @pf/server — Hono + Drizzle
+│       ├── drizzle.config.ts    # Drizzle Kit config
+│       └── src/
+│           ├── index.ts         # Hono app + Bun native server export
+│           └── db/
+│               ├── schema.ts    # Drizzle schema (khớp với DB đã tạo)
+│               └── index.ts     # DB connection (drizzle + postgres-js)
+└── doc/                         # Tài liệu sản phẩm
 ```
 
-## File Structure (Prototype)
+## Key Patterns
 
+### API Client (Frontend)
+```typescript
+// src/services/apiClient.ts
+// Tự động inject Authorization: Bearer <token> từ Supabase session
+apiClient<T>('/transactions', { method: 'POST', body: data })
 ```
-prototype/
-├── index.html          ← SPA entry point
-├── login.html          ← Auth (login / register / forgot)
-├── css/
-│   └── style.css       ← Design system + components
-└── js/
-    ├── data.js         ← Seed data (thay bằng API sau)
-    ├── charts.js       ← Chart.js initializers
-    ├── ui.js           ← DOM rendering functions
-    └── app.js          ← Navigation, modals, init
+
+### Hono Server
+```typescript
+// apps/server/src/index.ts
+const app = new Hono().basePath('/api')
+// Dev: export default { port: 3000, fetch: app.fetch } → Bun native server
+// Prod: api/index.ts dùng handle(app) → Vercel serverless
 ```
+
+### Drizzle ORM
+```typescript
+// apps/server/src/db/index.ts
+const client = postgres(process.env.DATABASE_URL!)
+export const db = drizzle(client, { schema })
+// Query: db.select().from(transactions).where(eq(transactions.userId, userId))
+```
+
+### Auth Flow
+1. Frontend: `supabase.auth.signInWithPassword()` → nhận JWT
+2. Frontend: gửi `Authorization: Bearer <token>` trong mọi API request
+3. Backend auth middleware: `supabaseAdmin.auth.getUser(token)` → lấy userId
+4. Backend: query DB với userId đã verify
+
+### Cache Invalidation (TanStack Query)
+| Mutation | Keys bị invalidate |
+|:---|:---|
+| transaction CRUD | `['transactions']`, `['dashboard']`, `['reports']` |
+| category CRUD | `['categories']`, `['transactions']` |
+| budget CRUD | `['budgets']`, `['dashboard']` |
+| asset CRUD | `['assets']`, `['dashboard']` |
+| wallet CRUD | `['wallets']`, `['dashboard']` |
+
+## Database Schema (10 bảng)
+```
+user_profiles (1)
+  └── category_groups (8) → categories (25)
+  └── wallets (3)
+  └── transactions (24) → [category, wallet, to_wallet?]
+  └── recurring_templates
+  └── budgets (1) → category_budgets (6) → [category]
+  └── assets (10) → asset_history (6)
+```
+Test data: tháng 1 + 2/2026, user `test@example.com`
