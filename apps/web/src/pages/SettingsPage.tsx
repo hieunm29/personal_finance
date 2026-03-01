@@ -6,6 +6,7 @@ import {
   updateProfileSchema,
   changePasswordSchema,
   QUERY_KEYS,
+  CURRENCIES,
   type UpdateProfileInput,
   type ChangePasswordInput,
   type UserProfile,
@@ -83,6 +84,23 @@ function ProfileSection() {
           {errors.displayName && (
             <p className="mt-1 text-sm text-red-600">{errors.displayName.message}</p>
           )}
+        </div>
+
+        <div>
+          <label htmlFor="currency" className="block text-sm font-medium text-gray-700">
+            Tiền tệ mặc định
+          </label>
+          <select
+            id="currency"
+            {...register('currency')}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c === 'VND' ? 'VND — Việt Nam đồng' : c === 'USD' ? 'USD — US Dollar' : 'EUR — Euro'}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex items-center gap-3">
