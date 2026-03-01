@@ -1,7 +1,7 @@
 # Tiến độ (Progress)
 
 ## Trạng thái Hiện tại
-**Giai đoạn:** Phase 1 MVP — Authentication module hoàn thành (US-AUTH-01 → 05)
+**Giai đoạn:** Phase 1 MVP — Authentication module 100% hoàn thành (US-AUTH-01 → 06 + Infrastructure Phần 7)
 **Cập nhật:** 2026-03-01
 
 ---
@@ -47,22 +47,26 @@
 - [x] `SettingsPage.tsx` — profile section + change password section
 - [x] better-auth built-in `/api/auth/change-password`
 
-### Frontend Infrastructure
+#### US-AUTH-06: Cài đặt tiền tệ mặc định ✅
+- [x] Currency selector (VND/USD/EUR) trong `SettingsPage.tsx` ProfileSection
+- [x] `apps/web/src/utils/format.ts` — `formatCurrency(amountCents, currency)` + `formatDate(dateString)`
+  - VND: 150000000 → "1.500.000 ₫" | USD: 150000 → "$1,500.00" | EUR: 150000 → "1.500,00 €"
+  - Date: "2026-03-01" → "01/03/2026"
+
+### Frontend Infrastructure (Phần 7) ✅
+- [x] `lib/auth-client.ts` — createAuthClient + useSession/signIn/signUp/signOut hooks
 - [x] `App.tsx` — BrowserRouter + Routes (public + protected)
 - [x] `ProtectedRoute.tsx` — auth guard với loading spinner
 - [x] `AppLayout.tsx` — header nav (Dashboard, Cài đặt) + email display + Đăng xuất
 - [x] `DashboardPage.tsx` — placeholder
+- [x] `middleware/errorHandler.ts` — Zod→400, notFound→404, generic→500
 - [x] Routes: `/`, `/login`, `/register`, `/settings`
 
 ---
 
 ## 🔲 Còn Lại — Phase 1 MVP
 
-### US-AUTH-06: Cài đặt tiền tệ
-- [ ] Currency selector trong SettingsPage (VND/USD/EUR)
-- [ ] `formatCurrency()` + `formatDate()` utilities
-
-### Module 2: Transactions
+### Module 2: Transactions (Tiếp theo)
 - [ ] Backend: transactionService + routes
 - [ ] Frontend: TransactionList, TransactionForm, filters
 

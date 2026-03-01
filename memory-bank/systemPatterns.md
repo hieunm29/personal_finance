@@ -49,11 +49,13 @@ Personal_Finance/
 │   ├── components/layout/
 │   │   ├── ProtectedRoute.tsx       # useSession guard → /login
 │   │   └── AppLayout.tsx            # Header nav + Đăng xuất
+│   ├── utils/
+│   │   └── format.ts                # formatCurrency(cents, currency) + formatDate(str)
 │   └── pages/
 │       ├── LoginPage.tsx
 │       ├── RegisterPage.tsx
 │       ├── DashboardPage.tsx        # Placeholder
-│       └── SettingsPage.tsx         # Profile + Change password
+│       └── SettingsPage.tsx         # Profile + Currency + Change password
 └── apps/server/src/
     ├── index.ts                     # Hono app entry
     ├── auth.ts                      # better-auth config + databaseHooks
@@ -133,6 +135,18 @@ databaseHooks: {
 // 401: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }
 // 400 Zod: { error: { code: 'VALIDATION_ERROR', details: [...] } }
 // 500: { error: { code: 'INTERNAL_ERROR', message: 'Lỗi hệ thống' } }
+```
+
+### Format Utilities
+```typescript
+// apps/web/src/utils/format.ts — Cached Intl formatters
+formatCurrency(amountCents: number, currency = 'VND'): string
+// VND: 150000000 → "1.500.000 ₫" | USD: 150000 → "$1,500.00" | EUR: 150000 → "1.500,00 €"
+// NOTE: chia 100 trước khi format (stored as cents)
+
+formatDate(dateString: string): string
+// "2026-03-01" → "01/03/2026" (vi-VN locale)
+// Append T00:00:00 nếu chỉ có date part để tránh timezone shift
 ```
 
 ## Cache Invalidation (TanStack Query)
