@@ -1,68 +1,83 @@
 # Tiến độ (Progress)
 
 ## Trạng thái Hiện tại
-**Giai đoạn:** Môi trường dev sẵn sàng — Chuẩn bị implement Phase 1 (MVP)
-**Cập nhật:** 2026-02-28
+**Giai đoạn:** Phase 1 MVP — Authentication module hoàn thành (US-AUTH-01 → 05)
+**Cập nhật:** 2026-03-01
 
 ---
 
 ## ✅ Đã Hoàn thành
 
-### Documentation
-- [x] `doc/0.overview.md` — Yêu cầu tổng quan
-- [x] `doc/1.product.md` — Product spec đầy đủ (7 modules, 3 phases)
-- [x] `doc/2a–2h.userstories_*.md` — 8 file user stories chi tiết
-- [x] `doc/3.techbase.md` — Tech stack chính thức
-- [x] `doc/3b.tech_structure.md` — Kiến trúc kỹ thuật chi tiết (data flow, patterns, folder structure)
-- [x] `doc/4.database_prepare.md` — SQL schema + test data đầy đủ
+### Stack Migration (Feb 28 → Mar 1)
+- [x] Migration từ PostgreSQL/Supabase/Vercel → SQLite/better-auth/Docker Compose
+- [x] `doc/3.techbase.md` — Cập nhật tech stack mới
+- [x] `doc/4.database_prepare.md` — Cập nhật cho SQLite + Drizzle workflow
 
-### Database (Supabase — project: supabase-red-canvas)
-- [x] 6 enums tạo thành công
-- [x] 10 bảng tạo thành công (đúng thứ tự FK dependencies)
-- [x] 14 indexes tạo thành công
-- [x] Test user: `test@example.com` / `Test123456!` (UUID: `aaaaaaaa-0000-0000-0000-000000000001`)
-- [x] Dữ liệu test: 1 profile, 8 category groups, 25 categories, 3 wallets, 24 transactions, 1 budget, 6 category budgets, 10 assets, 6 asset history records
+### Infrastructure
+- [x] `apps/server/src/db/schema.ts` — 14 bảng SQLite (4 better-auth + 10 app)
+- [x] `apps/server/src/db/index.ts` — bun:sqlite + Drizzle, WAL mode, FK ON
+- [x] `apps/server/src/auth.ts` — better-auth config + databaseHooks
+- [x] `apps/server/src/middleware/errorHandler.ts` — Zod→400, notFound→404, generic→500
+- [x] `apps/server/src/index.ts` — Hono app, auth handler, auth middleware, routes
+- [x] `apps/server/drizzle.config.ts` — dùng `resolve()` để fix path issue
+- [x] DB migrations applied → `apps/server/data/app.db`
 
-### Monorepo Scaffold
-- [x] Root: `package.json` (Bun workspaces), `tsconfig.json`, `bunfig.toml`, `vercel.json`
-- [x] `.env` — điền sẵn SUPABASE_URL + ANON_KEY (còn thiếu SERVICE_ROLE_KEY và DATABASE_URL password)
-- [x] `CLAUDE.md` — project rules
-- [x] `packages/shared/` — Zod schemas, TypeScript types, constants dùng chung FE/BE
-- [x] `apps/web/` — React 19 + Vite 6 + TailwindCSS 4 (chạy được trên :5173)
-- [x] `apps/server/` — Hono 4 + Drizzle ORM (chạy được trên :3000)
-- [x] `api/index.ts` — Vercel serverless entry
-- [x] `bun install` — 266 packages installed
+### Phase 1 — Authentication (US-AUTH-01 → 05)
 
-### Prototype (UI/UX tham khảo)
-- [x] `prototype/` — Self-contained HTML prototype, 7 trang đầy đủ
+#### US-AUTH-01: Đăng ký tài khoản ✅
+- [x] `seedService.ts` — seedUserData() tạo profile + categories (8 groups, ~23 cats) + wallet
+- [x] `auth.ts` databaseHooks.user.create.after → auto-seed khi đăng ký
+- [x] `RegisterPage.tsx` — form email/password/confirmPassword + validation
+
+#### US-AUTH-02: Đăng nhập ✅
+- [x] better-auth handler `/api/auth/**` — built-in
+- [x] `LoginPage.tsx` — form email/password + signIn.email()
+
+#### US-AUTH-03: Đăng xuất ✅
+- [x] `AppLayout.tsx` — nút Đăng xuất: signOut() + queryClient.clear() + navigate
+
+#### US-AUTH-04: Tự động gia hạn phiên ✅
+- [x] better-auth cookie sessions với auto-refresh (built-in)
+- [x] `ProtectedRoute.tsx` — redirect /login khi session hết
+- [x] `apiClient.ts` — bắt 401 → window.location.href = '/login'
+
+#### US-AUTH-05: Quản lý hồ sơ cá nhân ✅
+- [x] `settingsService.ts` — getProfile() + updateProfile()
+- [x] `routes/settings.ts` — GET/PUT /api/settings/profile
+- [x] `SettingsPage.tsx` — profile section + change password section
+- [x] better-auth built-in `/api/auth/change-password`
+
+### Frontend Infrastructure
+- [x] `App.tsx` — BrowserRouter + Routes (public + protected)
+- [x] `ProtectedRoute.tsx` — auth guard với loading spinner
+- [x] `AppLayout.tsx` — header nav (Dashboard, Cài đặt) + email display + Đăng xuất
+- [x] `DashboardPage.tsx` — placeholder
+- [x] Routes: `/`, `/login`, `/register`, `/settings`
 
 ---
 
-## 🔲 Còn Lại
+## 🔲 Còn Lại — Phase 1 MVP
 
-### Env vars cần bổ sung
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` — Dashboard > Settings > API > service_role
-- [ ] `DATABASE_URL` — thay `[PASSWORD]` bằng DB password thực
+### US-AUTH-06: Cài đặt tiền tệ
+- [ ] Currency selector trong SettingsPage (VND/USD/EUR)
+- [ ] `formatCurrency()` + `formatDate()` utilities
 
-### Phase 1 — MVP
-- [ ] Auth flow: đăng nhập / đăng ký (Supabase Auth + frontend)
-- [ ] Dashboard: tổng quan thu/chi tháng hiện tại
-- [ ] Transactions: CRUD, lọc, phân trang
-- [ ] Categories: xem danh mục, quản lý cơ bản
+### Module 2: Transactions
+- [ ] Backend: transactionService + routes
+- [ ] Frontend: TransactionList, TransactionForm, filters
 
-### Phase 2
-- [ ] Budget Planner
-- [ ] Asset Tracker + Net Worth
-- [ ] Báo cáo đầy đủ + Giao dịch định kỳ
+### Module 3: Categories
+- [ ] Backend: categoryService + routes
+- [ ] Frontend: CategoryList, CategoryForm
 
-### Phase 3
-- [ ] Settings nâng cao
-- [ ] Responsive mobile
-- [ ] Tối ưu hiệu năng
+### Module 4: Dashboard
+- [ ] Backend: dashboardService (tổng thu/chi tháng, số dư)
+- [ ] Frontend: DashboardPage đầy đủ với charts
 
 ---
 
 ## Các Vấn đề Đã biết
-- Bun `--watch` + Bun native server gây lỗi `EADDRINUSE` khi reload — chạy server 1 lần bình thường không bị
-- `hono/vercel` trong `api/index.ts` chưa resolve type (chỉ cần khi deploy Vercel, không ảnh hưởng dev)
-- Port conflict khi có stale process: dùng `lsof -ti:5173,3000 | xargs kill -9` để dọn
+- `drizzle-kit migrate` không chạy được với Bun (dùng `better-sqlite3`) → dùng `push` hoặc apply SQL trực tiếp qua bun:sqlite
+- DB path: server dùng `apps/server/data/app.db` (CWD = apps/server/), drizzle.config.ts cần `resolve()` để đúng path
+- better-auth `/api/auth/**` yêu cầu `Origin` header (CSRF) — browser tự gửi, curl test phải thêm `-H "Origin: http://localhost:5173"`
+- Port conflict: `lsof -ti:5173,3000 | xargs kill -9`

@@ -1,121 +1,153 @@
 # Mẫu Hệ thống (System Patterns)
 
-## Kiến trúc Thực tế
+## Kiến trúc
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                         BROWSER                              │
-│  React 19 · Vite 6 · TailwindCSS 4 · React Router 7         │
-│  TanStack Query (server state) · Zustand (UI state)          │
-│  @supabase/supabase-js (Auth trực tiếp)                      │
-└────────────┬──────────────────────────────┬──────────────────┘
-             │ fetch /api/*                 │ Supabase Auth SDK
-             │ Authorization: Bearer JWT   │ (signUp, signIn)
-             ▼                              ▼
-┌────────────────────────┐   ┌─────────────────────────────────┐
-│   VERCEL SERVERLESS    │   │         SUPABASE AUTH           │
-│   Hono 4 · /api/*      │   │  JWT · refresh token · sessions │
-│   logger→cors→auth     │   └─────────────────────────────────┘
-│   →zod-validator        │
-│   →route handler        │
-│   →Drizzle ORM          │
-└────────────┬────────────┘
-             │ postgres-js (DATABASE_URL)
-             ▼
-┌────────────────────────────────────────────────────────────┐
-│                  SUPABASE PostgreSQL                        │
-│  user_profiles · category_groups · categories · wallets    │
-│  transactions · recurring_templates · budgets              │
-│  category_budgets · assets · asset_history                 │
-└────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                        BROWSER                           │
+│  React 19 · Vite 6 · TailwindCSS 4 · React Router 7    │
+│  TanStack Query · Zustand · react-hook-form + zod       │
+│  better-auth/react (useSession, signIn, signOut)        │
+└───────────────┬─────────────────────────────────────────┘
+                │ fetch /api/* (credentials: include)
+                │ Cookie: better-auth session
+                ▼
+┌─────────────────────────────────────────────────────────┐
+│              HONO 4 (Bun native, :3000)                  │
+│  logger → cors → /api/health                            │
+│                → /api/auth/** (better-auth handler)     │
+│                → auth middleware (getSession + userId)  │
+│                → /api/settings/** (settingsRoutes)      │
+│                → /api/transactions/** (TODO)            │
+└───────────────┬─────────────────────────────────────────┘
+                │ Drizzle ORM (bun:sqlite)
+                ▼
+┌─────────────────────────────────────────────────────────┐
+│     SQLite — apps/server/data/app.db                    │
+│  user · session · account · verification (better-auth) │
+│  user_profiles · category_groups · categories          │
+│  wallets · transactions · budgets · assets · ...       │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Monorepo Structure
+## Folder Structure
 
 ```
 Personal_Finance/
-├── CLAUDE.md                    # Project rules cho Claude
-├── package.json                 # Bun workspaces root
-├── tsconfig.json                # TypeScript base config
-├── bunfig.toml                  # Bun config
-├── vercel.json                  # Deploy config
-├── .env / .env.example          # Env vars
-├── api/
-│   └── index.ts                 # Vercel serverless entry (hono/vercel)
-├── packages/
-│   └── shared/                  # @pf/shared — dùng chung FE/BE
-│       └── src/
-│           ├── types/index.ts   # TypeScript interfaces (khớp DB schema)
-│           ├── schemas/index.ts # Zod validation schemas
-│           └── constants/index.ts # QUERY_KEYS, ROUTES, enums
-├── apps/
-│   ├── web/                     # @pf/web — React + Vite
-│   │   ├── vite.config.ts       # Proxy /api → :3000, envDir → root
-│   │   └── src/
-│   │       ├── App.tsx          # Entry, router, auth guard
-│   │       ├── main.tsx         # ReactDOM + QueryClientProvider
-│   │       ├── index.css        # @import "tailwindcss" + @theme
-│   │       └── services/
-│   │           ├── supabase.ts  # Supabase client init
-│   │           └── apiClient.ts # fetch wrapper với auth header
-│   └── server/                  # @pf/server — Hono + Drizzle
-│       ├── drizzle.config.ts    # Drizzle Kit config
-│       └── src/
-│           ├── index.ts         # Hono app + Bun native server export
-│           └── db/
-│               ├── schema.ts    # Drizzle schema (khớp với DB đã tạo)
-│               └── index.ts     # DB connection (drizzle + postgres-js)
-└── doc/                         # Tài liệu sản phẩm
+├── CLAUDE.md                         # Project rules
+├── package.json                      # Bun workspaces root
+├── docker-compose.yml / .dev.yml     # Deploy
+├── packages/shared/src/
+│   ├── types/index.ts               # TypeScript interfaces
+│   ├── schemas/index.ts             # Zod schemas (signUpSchema, updateProfileSchema, ...)
+│   └── constants/index.ts           # QUERY_KEYS, ROUTES, DEFAULT_CATEGORY_GROUPS
+├── apps/web/src/
+│   ├── App.tsx                      # BrowserRouter + Routes
+│   ├── main.tsx                     # QueryClientProvider wrapper
+│   ├── lib/auth-client.ts           # createAuthClient (better-auth/react)
+│   ├── services/apiClient.ts        # fetch wrapper, credentials:include, 401→redirect
+│   ├── components/layout/
+│   │   ├── ProtectedRoute.tsx       # useSession guard → /login
+│   │   └── AppLayout.tsx            # Header nav + Đăng xuất
+│   └── pages/
+│       ├── LoginPage.tsx
+│       ├── RegisterPage.tsx
+│       ├── DashboardPage.tsx        # Placeholder
+│       └── SettingsPage.tsx         # Profile + Change password
+└── apps/server/src/
+    ├── index.ts                     # Hono app entry
+    ├── auth.ts                      # better-auth config + databaseHooks
+    ├── db/
+    │   ├── schema.ts                # 14 SQLite tables
+    │   ├── index.ts                 # drizzle(sqlite, { schema })
+    │   ├── seed.ts                  # Dev seed script
+    │   └── migrations/              # Generated SQL migrations
+    ├── services/
+    │   ├── seedService.ts           # seedUserData() — profile + categories + wallet
+    │   └── settingsService.ts       # getProfile() + updateProfile()
+    ├── routes/
+    │   └── settings.ts             # GET/PUT /api/settings/profile
+    └── middleware/
+        └── errorHandler.ts          # Zod→400, notFound→404, generic→500
 ```
 
 ## Key Patterns
 
-### API Client (Frontend)
+### Backend Route (Hono)
 ```typescript
-// src/services/apiClient.ts
-// Tự động inject Authorization: Bearer <token> từ Supabase session
-apiClient<T>('/transactions', { method: 'POST', body: data })
+// apps/server/src/routes/settings.ts
+const settings = new Hono<{ Variables: { userId: string } }>()
+settings.get('/profile', (c) => {
+  const profile = getProfile(c.get('userId'))  // userId từ auth middleware
+  return c.json({ data: profile })
+})
+settings.put('/profile', zValidator('json', updateProfileSchema), (c) => {
+  const data = c.req.valid('json')
+  return c.json({ data: updateProfile(c.get('userId'), data) })
+})
+// Mount: app.route('/api/settings', settingsRoutes) — SAU app.use('/api/*', authMiddleware)
 ```
 
-### Hono Server
+### Frontend API Call (TanStack Query)
 ```typescript
-// apps/server/src/index.ts
-const app = new Hono().basePath('/api')
-// Dev: export default { port: 3000, fetch: app.fetch } → Bun native server
-// Prod: api/index.ts dùng handle(app) → Vercel serverless
+// useQuery — fetch data
+const { data } = useQuery({
+  queryKey: QUERY_KEYS.profile,
+  queryFn: () => apiClient<{ data: UserProfile }>('/settings/profile'),
+})
+// useMutation — mutate then invalidate
+const qc = useQueryClient()
+await apiClient('/settings/profile', { method: 'PUT', body: data })
+await qc.invalidateQueries({ queryKey: QUERY_KEYS.profile })
 ```
 
-### Drizzle ORM
+### Auth Client (better-auth/react)
 ```typescript
-// apps/server/src/db/index.ts
-const client = postgres(process.env.DATABASE_URL!)
-export const db = drizzle(client, { schema })
-// Query: db.select().from(transactions).where(eq(transactions.userId, userId))
+// lib/auth-client.ts
+export const authClient = createAuthClient({ baseURL: 'http://localhost:3000' })
+
+// Trong component:
+const { data: session, isPending } = authClient.useSession()
+await authClient.signUp.email({ email, password, name })
+await authClient.signIn.email({ email, password })
+await authClient.signOut()
+await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: false })
 ```
 
-### Auth Flow
-1. Frontend: `supabase.auth.signInWithPassword()` → nhận JWT
-2. Frontend: gửi `Authorization: Bearer <token>` trong mọi API request
-3. Backend auth middleware: `supabaseAdmin.auth.getUser(token)` → lấy userId
-4. Backend: query DB với userId đã verify
+### seedUserData (auto-seed khi đăng ký)
+```typescript
+// auth.ts — better-auth hook
+databaseHooks: {
+  user: { create: { after: async (user) => seedUserData(user.id, user.name) } }
+}
+// seedService.ts — idempotent
+// 1. Check profile exists → return sớm
+// 2. Create user_profiles (currency='VND', theme='system')
+// 3. Seed DEFAULT_CATEGORY_GROUPS (8 groups, ~23 categories)
+// 4. Create wallet "Tiền mặt" (cash, isDefault:true, balance:0)
+```
 
-### Cache Invalidation (TanStack Query)
+### Error Response Format
+```typescript
+// Tất cả API errors: { error: { code: string, message: string } }
+// 401: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }
+// 400 Zod: { error: { code: 'VALIDATION_ERROR', details: [...] } }
+// 500: { error: { code: 'INTERNAL_ERROR', message: 'Lỗi hệ thống' } }
+```
+
+## Cache Invalidation (TanStack Query)
 | Mutation | Keys bị invalidate |
 |:---|:---|
-| transaction CRUD | `['transactions']`, `['dashboard']`, `['reports']` |
-| category CRUD | `['categories']`, `['transactions']` |
-| budget CRUD | `['budgets']`, `['dashboard']` |
-| asset CRUD | `['assets']`, `['dashboard']` |
+| profile update | `QUERY_KEYS.profile` |
+| transaction CRUD | `['transactions']`, `['dashboard']` |
+| category CRUD | `['categories']` |
 | wallet CRUD | `['wallets']`, `['dashboard']` |
+| budget CRUD | `['budgets']` |
 
-## Database Schema (10 bảng)
+## Routing
 ```
-user_profiles (1)
-  └── category_groups (8) → categories (25)
-  └── wallets (3)
-  └── transactions (24) → [category, wallet, to_wallet?]
-  └── recurring_templates
-  └── budgets (1) → category_budgets (6) → [category]
-  └── assets (10) → asset_history (6)
+Public:    /login, /register
+Protected: / (Dashboard), /settings
+Guard: ProtectedRoute → useSession() → isPending→spinner, !session→/login, session→Outlet
+Layout: AppLayout → Header (nav + email + Đăng xuất) + main Outlet
 ```
-Test data: tháng 1 + 2/2026, user `test@example.com`
