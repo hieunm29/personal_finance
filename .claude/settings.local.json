@@ -29,7 +29,13 @@
       "Bash(node:*)",
       "Bash(mkdir:*)",
       "mcp__supabase__search_docs",
-      "Bash(bun:*)"
+      "Bash(bun:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_fill_form",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_select_option",
+      "mcp__playwright__browser_run_code"
     ]
   },
   "enabledMcpjsonServers": [
