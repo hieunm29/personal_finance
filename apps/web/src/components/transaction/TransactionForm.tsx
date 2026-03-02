@@ -4,10 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { createTransactionSchema, type CreateTransactionInput, type CategoryWithGroup } from '@pf/shared'
 import { useCategories } from '../../hooks/useCategories'
 import { useWallets } from '../../hooks/useWallets'
-import { useCreateTransaction } from '../../hooks/useTransactions'
+import { useCreateTransaction, useUpdateTransaction } from '../../hooks/useTransactions'
 
 interface TransactionFormProps {
   mode: 'create' | 'edit'
+  transactionId?: string
   defaultValues?: Partial<CreateTransactionInput>
   onSuccess?: () => void
   onCancel?: () => void
@@ -66,6 +67,7 @@ function groupByGroup(categories: CategoryWithGroup[]) {
 // ─── Main form ───────────────────────────────────────────────
 export default function TransactionForm({
   mode,
+  transactionId,
   defaultValues,
   onSuccess,
   onCancel,
@@ -112,9 +114,16 @@ export default function TransactionForm({
   )
 
   const createMutation = useCreateTransaction()
+  const updateMutation = useUpdateTransaction(transactionId ?? '')
+
+  const activeMutation = mode === 'edit' ? updateMutation : createMutation
 
   const onSubmit = async (data: CreateTransactionInput) => {
-    await createMutation.mutateAsync(data)
+    if (mode === 'edit') {
+      await updateMutation.mutateAsync(data)
+    } else {
+      await createMutation.mutateAsync(data)
+    }
     onSuccess?.()
   }
 
@@ -245,18 +254,18 @@ export default function TransactionForm({
       </div>
 
       {/* Server error */}
-      {createMutation.error && (
-        <p className="text-sm text-red-600">{createMutation.error.message}</p>
+      {activeMutation.error && (
+        <p className="text-sm text-red-600">{activeMutation.error.message}</p>
       )}
 
       {/* Actions */}
       <div className="flex gap-3 pt-1">
         <button
           type="submit"
-          disabled={isSubmitting || createMutation.isPending}
+          disabled={isSubmitting || activeMutation.isPending}
           className="flex-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {createMutation.isPending ? 'Đang lưu...' : 'Lưu giao dịch'}
+          {activeMutation.isPending ? 'Đang lưu...' : 'Lưu giao dịch'}
         </button>
         {onCancel && (
           <button

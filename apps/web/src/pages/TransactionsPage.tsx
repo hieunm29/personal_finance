@@ -30,13 +30,23 @@ function CategoryIcon({ name, color }: { name: string; color: string | null }) {
 }
 
 // ─── Transaction row ─────────────────────────────────────────
-function TransactionRow({ txn }: { txn: TransactionWithRelations }) {
+function TransactionRow({
+  txn,
+  onClick,
+}: {
+  txn: TransactionWithRelations
+  onClick: () => void
+}) {
   const isIncome = txn.type === 'income'
   const amountStr = `${isIncome ? '+' : '−'} ${formatCurrency(txn.amount)}`
   const cat = txn.category as (typeof txn.category & { name: string; color: string | null }) | null
 
   return (
-    <div className="flex items-center gap-3 py-3">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 py-3 text-left hover:bg-gray-50 transition-colors"
+    >
       <CategoryIcon name={cat?.name ?? '?'} color={cat?.color ?? null} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-gray-900">{cat?.name ?? '—'}</p>
@@ -52,7 +62,7 @@ function TransactionRow({ txn }: { txn: TransactionWithRelations }) {
       >
         {amountStr}
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -114,7 +124,8 @@ function Modal({
 // ─── Page ────────────────────────────────────────────────────
 export default function TransactionsPage() {
   const [page, setPage] = useState(1)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [editTx, setEditTx] = useState<TransactionWithRelations | null>(null)
 
   const { data, isLoading } = useTransactions({ page, limit: 20 })
 
@@ -123,8 +134,12 @@ export default function TransactionsPage() {
   const isEmpty = !isLoading && (data?.data.length ?? 0) === 0
 
   const handleCreated = () => {
-    setModalOpen(false)
+    setCreateModalOpen(false)
     setPage(1) // reset về đầu sau khi tạo mới
+  }
+
+  const handleUpdated = () => {
+    setEditTx(null)
   }
 
   return (
@@ -133,7 +148,7 @@ export default function TransactionsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Giao dịch</h1>
         <button
-          onClick={() => setModalOpen(true)}
+          onClick={() => setCreateModalOpen(true)}
           className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark"
         >
           <span className="text-base leading-none">+</span>
@@ -174,7 +189,7 @@ export default function TransactionsPage() {
               {/* Rows */}
               <div className="divide-y divide-gray-50 px-4">
                 {txns.map((txn) => (
-                  <TransactionRow key={txn.id} txn={txn} />
+                  <TransactionRow key={txn.id} txn={txn} onClick={() => setEditTx(txn)} />
                 ))}
               </div>
             </div>
@@ -206,12 +221,32 @@ export default function TransactionsPage() {
       )}
 
       {/* Modal tạo giao dịch */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Thêm giao dịch mới">
+      <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="Thêm giao dịch mới">
         <TransactionForm
           mode="create"
           onSuccess={handleCreated}
-          onCancel={() => setModalOpen(false)}
+          onCancel={() => setCreateModalOpen(false)}
         />
+      </Modal>
+
+      {/* Modal chỉnh sửa giao dịch */}
+      <Modal open={!!editTx} onClose={() => setEditTx(null)} title="Chỉnh sửa giao dịch">
+        {editTx && (
+          <TransactionForm
+            mode="edit"
+            transactionId={editTx.id}
+            defaultValues={{
+              type: editTx.type as 'income' | 'expense',
+              amount: editTx.amount,
+              categoryId: editTx.categoryId,
+              walletId: editTx.walletId,
+              date: editTx.date,
+              note: editTx.note ?? '',
+            }}
+            onSuccess={handleUpdated}
+            onCancel={() => setEditTx(null)}
+          />
+        )}
       </Modal>
     </div>
   )

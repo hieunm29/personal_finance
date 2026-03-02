@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   QUERY_KEYS,
   type CreateTransactionInput,
+  type UpdateTransactionInput,
   type TransactionFilter,
   type TransactionWithRelations,
   type PaginationMeta,
@@ -42,6 +43,26 @@ export function useCreateTransaction() {
   return useMutation({
     mutationFn: (data: CreateTransactionInput) =>
       apiClient<{ data: unknown }>('/transactions', { method: 'POST', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.transactions })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard })
+    },
+  })
+}
+
+export function useTransaction(id: string | null) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.transactions, id],
+    queryFn: () => apiClient<{ data: TransactionWithRelations }>(`/transactions/${id}`),
+    enabled: !!id,
+  })
+}
+
+export function useUpdateTransaction(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: UpdateTransactionInput) =>
+      apiClient<{ data: unknown }>(`/transactions/${id}`, { method: 'PUT', body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.transactions })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard })
