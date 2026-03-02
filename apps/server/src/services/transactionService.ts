@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, like, sql, desc } from 'drizzle-orm'
+import { eq, and, gte, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../db'
 import { transactions, categories, wallets, userProfiles } from '../db/schema'
 import type { CreateTransactionInput, UpdateTransactionInput, TransactionFilter } from '@pf/shared'
@@ -108,78 +108,91 @@ export function getTransactions(authUserId: string, filters: TransactionFilter) 
   if (filters.dateTo) conditions.push(lte(transactions.date, filters.dateTo))
   if (filters.amountFrom !== undefined) conditions.push(gte(transactions.amount, filters.amountFrom))
   if (filters.amountTo !== undefined) conditions.push(lte(transactions.amount, filters.amountTo))
-  if (filters.search) conditions.push(like(transactions.note, `%${filters.search}%`))
+  // Note: search filter is applied in JS (not SQL) for Unicode-aware case-insensitive matching
 
   const where = and(...conditions)
   const page = filters.page ?? 1
   const limit = filters.limit ?? 20
-  const offset = (page - 1) * limit
 
-  const rows = db
-    .select({
-      id: transactions.id,
-      userId: transactions.userId,
-      type: transactions.type,
-      amount: transactions.amount,
-      categoryId: transactions.categoryId,
-      walletId: transactions.walletId,
-      toWalletId: transactions.toWalletId,
-      date: transactions.date,
-      note: transactions.note,
-      isRecurring: transactions.isRecurring,
-      createdAt: transactions.createdAt,
-      updatedAt: transactions.updatedAt,
-      category: {
-        id: categories.id,
-        userId: categories.userId,
-        groupId: categories.groupId,
-        name: categories.name,
-        type: categories.type,
-        icon: categories.icon,
-        color: categories.color,
-        isVisible: categories.isVisible,
-        isDefault: categories.isDefault,
-        sortOrder: categories.sortOrder,
-        createdAt: categories.createdAt,
-      },
-      wallet: {
-        id: wallets.id,
-        userId: wallets.userId,
-        name: wallets.name,
-        type: wallets.type,
-        initialBalance: wallets.initialBalance,
-        isDefault: wallets.isDefault,
-        createdAt: wallets.createdAt,
-        updatedAt: wallets.updatedAt,
-      },
-    })
+  const selectShape = {
+    id: transactions.id,
+    userId: transactions.userId,
+    type: transactions.type,
+    amount: transactions.amount,
+    categoryId: transactions.categoryId,
+    walletId: transactions.walletId,
+    toWalletId: transactions.toWalletId,
+    date: transactions.date,
+    note: transactions.note,
+    isRecurring: transactions.isRecurring,
+    createdAt: transactions.createdAt,
+    updatedAt: transactions.updatedAt,
+    category: {
+      id: categories.id,
+      userId: categories.userId,
+      groupId: categories.groupId,
+      name: categories.name,
+      type: categories.type,
+      icon: categories.icon,
+      color: categories.color,
+      isVisible: categories.isVisible,
+      isDefault: categories.isDefault,
+      sortOrder: categories.sortOrder,
+      createdAt: categories.createdAt,
+    },
+    wallet: {
+      id: wallets.id,
+      userId: wallets.userId,
+      name: wallets.name,
+      type: wallets.type,
+      initialBalance: wallets.initialBalance,
+      isDefault: wallets.isDefault,
+      createdAt: wallets.createdAt,
+      updatedAt: wallets.updatedAt,
+    },
+  }
+
+  const baseQuery = db
+    .select(selectShape)
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(wallets, eq(transactions.walletId, wallets.id))
     .where(where)
     .orderBy(desc(transactions.date), desc(transactions.createdAt))
-    .limit(limit)
-    .offset(offset)
-    .all()
 
-  const countRow = db
-    .select({ count: sql<number>`count(*)` })
-    .from(transactions)
-    .where(where)
-    .get()
-  const total = countRow?.count ?? 0
+  let totalIncome = 0
+  let totalExpense = 0
+  let total: number
+  let rows: ReturnType<typeof baseQuery.all>
 
-  // Aggregates
-  const incomeRow = db
-    .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
-    .from(transactions)
-    .where(and(...conditions, eq(transactions.type, 'income')))
-    .get()
-  const expenseRow = db
-    .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
-    .from(transactions)
-    .where(and(...conditions, eq(transactions.type, 'expense')))
-    .get()
+  if (filters.search) {
+    // Fetch all SQL-filtered rows, then filter by search in JS (Unicode-aware)
+    const searchLower = filters.search.toLowerCase()
+    const allRows = baseQuery.all()
+    const filtered = allRows.filter((r) => r.note?.toLowerCase().includes(searchLower))
+    total = filtered.length
+    rows = filtered.slice((page - 1) * limit, page * limit)
+    for (const r of filtered) {
+      if (r.type === 'income') totalIncome += r.amount
+      else if (r.type === 'expense') totalExpense += r.amount
+    }
+  } else {
+    rows = baseQuery.limit(limit).offset((page - 1) * limit).all()
+    const countRow = db.select({ count: sql<number>`count(*)` }).from(transactions).where(where).get()
+    total = countRow?.count ?? 0
+    const incomeRow = db
+      .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
+      .from(transactions)
+      .where(and(...conditions, eq(transactions.type, 'income')))
+      .get()
+    const expenseRow = db
+      .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
+      .from(transactions)
+      .where(and(...conditions, eq(transactions.type, 'expense')))
+      .get()
+    totalIncome = incomeRow?.total ?? 0
+    totalExpense = expenseRow?.total ?? 0
+  }
 
   return {
     data: rows,
@@ -188,8 +201,8 @@ export function getTransactions(authUserId: string, filters: TransactionFilter) 
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      totalIncome: incomeRow?.total ?? 0,
-      totalExpense: expenseRow?.total ?? 0,
+      totalIncome,
+      totalExpense,
     },
   }
 }

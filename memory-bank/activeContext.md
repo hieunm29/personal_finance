@@ -1,36 +1,57 @@
 # Ngữ cảnh Hoạt động (Active Context)
 
 ## Trọng tâm Công việc Hiện tại
-- Đã hoàn thành giai đoạn **Documentation & Prototype**.
-- Bước tiếp theo: chọn tech stack chính thức và bắt đầu triển khai ứng dụng thực.
+**Giai đoạn:** Phase 1 MVP — Transaction Engine (US-TXN-01→07) vừa hoàn thành.
+**Tiếp theo:** US-TXN-08 Recurring (Phase 2) hoặc Module 3 Categories / Module 4 Dashboard.
 
-## Các Thay đổi Gần đây
+---
 
-### Giai đoạn 1 — Documentation (2026-02-27)
-- Tạo `doc/0.overview.md` — yêu cầu tổng quan ban đầu.
-- Tạo `doc/1.product.md` — tổng quan sản phẩm đầy đủ (7 modules, 3 phases, design principles).
-- Tạo 8 file user stories: authentication, transaction, category, dashboard, budget, asset, report, settings.
-- Thiết lập Memory Bank (6 file) và agent rules (`.agent/rules/`).
+## Các Thay đổi Gần đây (2026-03-02)
 
-### Giai đoạn 2 — Prototype (2026-02-28)
-- Tạo `prototype/index.html` — SPA prototype 7 trang (Dashboard, Giao dịch, Danh mục, Ngân sách, Tài sản, Báo cáo, Cài đặt).
-- Tạo `prototype/login.html` — Auth: Đăng nhập / Đăng ký / Quên mật khẩu.
-- Tạo `prototype/css/style.css` — Design system hoàn chỉnh với dark mode.
-- Tạo `prototype/js/data.js` — Sample data.
-- Tạo `prototype/js/charts.js` — Chart.js (bar, line, doughnut, area).
-- Tạo `prototype/js/ui.js` — UI rendering functions.
-- Tạo `prototype/js/app.js` — Navigation, modals, theme.
+### Transaction Engine hoàn thành (US-TXN-01→07)
+
+**Backend** (`apps/server/src/`):
+- `services/transactionService.ts` — CRUD + getTransactions (filter đầy đủ, aggregates totalIncome/totalExpense)
+- `routes/transactions.ts` — REST endpoints GET/POST/GET:id/PUT:id/DELETE:id
+- `routes/categories.ts` — GET /api/categories?type=
+- `routes/wallets.ts` — GET /api/wallets
+- `services/apiClient.ts` — fix 204 No Content (DELETE response)
+
+**Frontend** (`apps/web/src/`):
+- `hooks/useTransactions.ts` — useTransactions, useCreateTransaction, useTransaction, useUpdateTransaction, useDeleteTransaction
+- `hooks/useCategories.ts`, `hooks/useWallets.ts`
+- `components/transaction/TransactionForm.tsx` — create + edit mode
+- `components/transaction/TransactionFilters.tsx` — multi-criteria filter panel
+- `components/transaction/TransactionSearch.tsx` — debounce 300ms
+- `components/transaction/DeleteTransactionDialog.tsx`
+- `pages/TransactionsPage.tsx` — danh sách grouped, pagination, modal create/edit/delete
+
+**Quyết định kỹ thuật quan trọng:**
+- Default filter = tháng hiện tại (`buildDefaultFilters` dùng `new Date(y, m, 1)` / `new Date(y, m+1, 0)`)
+- "Xóa bộ lọc" reset về DEFAULT_FILTERS (tháng hiện tại), không phải về rỗng
+- Search: SQLite `lower()` ASCII-only → JS-side `.toLowerCase().includes()` (xem systemPatterns)
+- apiClient fix: check `response.status === 204` trước `response.json()`
+- Edit mode: `activeMutation = mode === 'edit' ? updateMutation : createMutation`
+
+---
 
 ## Các Bước Tiếp theo
-1. **Chọn tech stack** cho ứng dụng thực (frontend framework, backend, database).
-2. **Thiết kế database schema** (transactions, categories, budgets, assets, wallets, users).
-3. **Triển khai Phase 1 (MVP)**:
-   - Module 1: Authentication (JWT + BCrypt).
-   - Module 2: Transaction Engine (CRUD).
-   - Module 3: Category Management.
-   - Module 6: Dashboard cơ bản.
+
+### Option A — Phase 2 Transaction
+1. **US-TXN-08:** Recurring Templates (recurringService, RecurringPage)
+2. **US-TXN-09:** Export CSV
+
+### Option B — Module 3: Categories (CRUD)
+1. Backend: categoryService (create, update, delete, reorder)
+2. Frontend: CategoryPage với list + form
+
+### Option C — Module 4: Dashboard
+1. Backend: dashboardService (tổng thu/chi, số dư ví)
+2. Frontend: DashboardPage với charts (Chart.js)
+
+---
 
 ## Quyết định và Cân nhắc
-- Prototype đã xác nhận UI/UX, design system, và luồng người dùng.
-- Tech stack chưa được quyết định chính thức — prototype dùng vanilla HTML/CSS/JS.
-- Kiến trúc ứng dụng thực cần được thiết kế trước khi code.
+- Prototype đã xác nhận UI/UX; tech stack đã cố định (Bun/Hono/SQLite/React)
+- Tất cả amounts lưu integer cents; VND user nhập "150.000" → lưu 15000000
+- Drizzle SQLite không có `.returning()` sau INSERT → query lại bằng ID

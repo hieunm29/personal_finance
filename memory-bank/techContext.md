@@ -64,8 +64,10 @@ Request → logger() → cors() → /api/health (bypass)
                             → /api/auth/** (better-auth handler, bypass auth middleware)
                             → app.use('/api/*') auth middleware
                                 └─ getSession() → set userId → next()
-                            → /api/settings/** (settingsRoutes)
-                            → /api/transactions/** (TODO)
+                            → /api/settings/**    (settingsRoutes)
+                            → /api/transactions/** (transactionRoutes)
+                            → /api/categories/**  (categoryRoutes)
+                            → /api/wallets/**     (walletRoutes)
 ```
 
 ## Env Vars
