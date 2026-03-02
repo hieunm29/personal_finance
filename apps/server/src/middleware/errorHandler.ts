@@ -18,6 +18,18 @@ export const errorHandler: ErrorHandler = (err, c) => {
     )
   }
 
+  // Errors thrown from services with explicit status codes
+  const status = (err as { status?: number }).status
+  if (status === 400) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: err.message } }, 400)
+  }
+  if (status === 404) {
+    return c.json({ error: { code: 'NOT_FOUND', message: err.message } }, 404)
+  }
+  if (status === 409) {
+    return c.json({ error: { code: 'CONFLICT', message: err.message } }, 409)
+  }
+
   if (err.message?.toLowerCase().includes('not found')) {
     return c.json(
       { error: { code: 'NOT_FOUND', message: 'Không tìm thấy' } },

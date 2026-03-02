@@ -39,11 +39,13 @@ app.use('/api/*', async (c, next) => {
 import settingsRoutes from './routes/settings'
 import transactionRoutes from './routes/transactions'
 import categoriesRoutes from './routes/categories'
+import categoryGroupsRoutes from './routes/category-groups'
 import walletsRoutes from './routes/wallets'
 
 app.route('/api/settings', settingsRoutes)
 app.route('/api/transactions', transactionRoutes)
 app.route('/api/categories', categoriesRoutes)
+app.route('/api/category-groups', categoryGroupsRoutes)
 app.route('/api/wallets', walletsRoutes)
 
 // Serve static files in production

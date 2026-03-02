@@ -101,7 +101,17 @@ export const createCategorySchema = z.object({
   sortOrder: z.number().int().default(0),
 })
 
-export const updateCategorySchema = createCategorySchema.partial()
+export const updateCategorySchema = createCategorySchema
+  .pick({ name: true, icon: true, color: true })
+  .partial()
+
+export const updateCategoryGroupSchema = createCategoryGroupSchema
+  .pick({ name: true, color: true })
+  .partial()
+
+export const deleteCategorySchema = z.object({
+  replacementCategoryId: z.string().uuid().optional(),
+})
 
 // ═══════════════════════════════════════════════════════════
 // Wallet schemas
@@ -161,8 +171,10 @@ export type TransactionFilter = z.infer<typeof transactionFilterSchema>
 export type CreateRecurringInput = z.infer<typeof createRecurringSchema>
 export type UpdateRecurringInput = z.infer<typeof updateRecurringSchema>
 export type CreateCategoryGroupInput = z.infer<typeof createCategoryGroupSchema>
+export type UpdateCategoryGroupInput = z.infer<typeof updateCategoryGroupSchema>
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>
+export type DeleteCategoryInput = z.infer<typeof deleteCategorySchema>
 export type CreateWalletInput = z.infer<typeof createWalletSchema>
 export type UpdateWalletInput = z.infer<typeof updateWalletSchema>
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>

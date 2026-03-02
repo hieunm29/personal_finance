@@ -99,15 +99,53 @@
 
 ---
 
+### Phase 1 — Category Management (US-CAT-01 → 07) ✅
+
+#### Phần 0 — Infrastructure chung ✅
+- [x] `packages/shared/src/schemas/index.ts` — updateCategoryGroupSchema, deleteCategorySchema; fixed updateCategorySchema (chỉ name/icon/color)
+- [x] `packages/shared/src/types/index.ts` — CategoryGroupWithCategories
+- [x] `apps/server/src/services/categoryService.ts` — getCategories, getCategoryGroups, createCategory, updateCategory, toggleVisibility, deleteCategory, createCategoryGroup, updateCategoryGroup
+- [x] `apps/server/src/routes/categories.ts` — GET(+showHidden) / POST / PUT/:id / PATCH/:id/visibility / DELETE/:id
+- [x] `apps/server/src/routes/category-groups.ts` — GET / POST / PUT/:id
+- [x] `apps/server/src/index.ts` — mount /api/category-groups
+- [x] `apps/server/src/middleware/errorHandler.ts` — handle status 400/404/409 from services
+- [x] `apps/web/src/hooks/useCategories.ts` — useCreateCategory, useUpdateCategory, useToggleCategoryVisibility, useDeleteCategory, showHidden param
+- [x] `apps/web/src/hooks/useCategoryGroups.ts` — useCategoryGroups, useCreateCategoryGroup, useUpdateCategoryGroup
+- [x] `apps/web/src/App.tsx` — route /categories
+- [x] `apps/web/src/components/layout/AppLayout.tsx` — nav link "Danh mục"
+
+#### US-CAT-01: Danh mục mặc định ✅
+- [x] seedService.ts — seed 8 groups ~23 categories khi đăng ký (isDefault:true)
+
+#### US-CAT-02: Xem danh sách danh mục ✅
+- [x] `pages/CategoriesPage.tsx` — 2 tab (Chi tiêu/Thu nhập), grouped by group, badge Ẩn, opacity-50
+
+#### US-CAT-03: Thêm danh mục tùy chỉnh ✅
+- [x] CategoryForm (create mode) — type toggle, group select, name, icon preset, color preset
+- [x] Backend unique name check → 409 Conflict
+
+#### US-CAT-04: Sửa danh mục ✅
+- [x] CategoryForm (edit mode) — type/group disabled, pre-fill name/icon/color
+
+#### US-CAT-05: Ẩn danh mục ✅
+- [x] Toggle 👁/🙈 → PATCH /categories/:id/visibility
+
+#### US-CAT-06: Xóa danh mục tùy chỉnh ✅
+- [x] DeleteCategoryDialog — nếu có transactions bắt chọn replacement, Xóa disabled cho đến khi chọn
+- [x] Backend re-assigns transactions trước khi xóa
+
+#### US-CAT-07: Tạo nhóm danh mục mới ✅
+- [x] CategoryGroupForm (create + edit) — tên, loại, màu
+- [x] Nhóm rỗng hiện trong danh sách (useCategoryGroups seed vào groupByGroup)
+- [x] Nhóm tùy chỉnh có nút ✏️ trên group header
+
+---
+
 ## 🔲 Còn Lại — Phase 1 MVP
 
 ### Module 2: Transactions Phase 2
 - [ ] US-TXN-08: Giao dịch định kỳ (recurringService + RecurringPage)
 - [ ] US-TXN-09: Xuất dữ liệu CSV
-
-### Module 3: Categories
-- [ ] Backend: categoryService + routes (CRUD)
-- [ ] Frontend: CategoryList, CategoryForm
 
 ### Module 4: Dashboard
 - [ ] Backend: dashboardService (tổng thu/chi tháng, số dư)

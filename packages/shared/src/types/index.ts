@@ -50,6 +50,10 @@ export interface CategoryWithGroup extends Category {
   group: CategoryGroup
 }
 
+export interface CategoryGroupWithCategories extends CategoryGroup {
+  categories: Category[]
+}
+
 export interface Wallet {
   id: string
   userId: string

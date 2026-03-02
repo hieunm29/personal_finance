@@ -20,6 +20,7 @@
 │                → /api/settings/**                       │
 │                → /api/transactions/**                   │
 │                → /api/categories/**                     │
+│                → /api/category-groups/**                │
 │                → /api/wallets/**                        │
 └───────────────┬─────────────────────────────────────────┘
                 │ Drizzle ORM (bun:sqlite)
@@ -51,22 +52,28 @@ Personal_Finance/
 │   ├── utils/format.ts              # formatCurrency(cents, currency) + formatDate(str)
 │   ├── hooks/
 │   │   ├── useTransactions.ts       # useTransactions/Create/Update/Delete + useTransaction
-│   │   ├── useCategories.ts         # useCategories(type?)
+│   │   ├── useCategories.ts         # useCategories(type?, showHidden?) + CRUD mutations
+│   │   ├── useCategoryGroups.ts     # useCategoryGroups, useCreateCategoryGroup, useUpdateCategoryGroup
 │   │   └── useWallets.ts            # useWallets()
 │   ├── components/layout/
 │   │   ├── ProtectedRoute.tsx       # useSession guard → /login
-│   │   └── AppLayout.tsx            # Header nav + Đăng xuất
+│   │   └── AppLayout.tsx            # Header nav (Dashboard/Giao dịch/Danh mục/Cài đặt)
 │   ├── components/transaction/
 │   │   ├── TransactionForm.tsx      # create + edit mode, react-hook-form
 │   │   ├── TransactionFilters.tsx   # multi-criteria filter panel
 │   │   ├── TransactionSearch.tsx    # debounce 300ms search
 │   │   └── DeleteTransactionDialog.tsx
+│   ├── components/category/
+│   │   ├── CategoryForm.tsx         # create + edit mode (2 form riêng: CreateForm + EditForm)
+│   │   ├── CategoryGroupForm.tsx    # create + edit mode
+│   │   └── DeleteCategoryDialog.tsx # replacement select khi có transactions
 │   └── pages/
 │       ├── LoginPage.tsx
 │       ├── RegisterPage.tsx
 │       ├── DashboardPage.tsx        # Placeholder
 │       ├── SettingsPage.tsx
-│       └── TransactionsPage.tsx     # List + filter + search + modals
+│       ├── TransactionsPage.tsx     # List + filter + search + modals
+│       └── CategoriesPage.tsx       # 2 tabs, grouped + empty groups, full CRUD modals
 └── apps/server/src/
     ├── index.ts                     # Hono app entry, route mounts
     ├── auth.ts                      # better-auth config + databaseHooks
@@ -75,14 +82,16 @@ Personal_Finance/
     ├── services/
     │   ├── seedService.ts           # seedUserData() — profile + categories + wallet
     │   ├── settingsService.ts       # getProfile() + updateProfile()
-    │   └── transactionService.ts    # createTransaction, getTransactions, update, delete
+    │   ├── transactionService.ts    # createTransaction, getTransactions, update, delete
+    │   └── categoryService.ts       # getCategories, getCategoryGroups, CRUD + toggleVisibility + deleteWithReplace
     ├── routes/
     │   ├── settings.ts              # GET/PUT /api/settings/profile
     │   ├── transactions.ts          # CRUD /api/transactions
-    │   ├── categories.ts            # GET /api/categories?type=
+    │   ├── categories.ts            # GET(showHidden)/POST/PUT/:id/PATCH/:id/visibility/DELETE/:id
+    │   ├── category-groups.ts       # GET/POST/PUT/:id /api/category-groups
     │   └── wallets.ts               # GET /api/wallets
     └── middleware/
-        └── errorHandler.ts          # Zod→400, notFound→404, generic→500
+        └── errorHandler.ts          # Zod→400, service status→400/404/409, generic→500
 ```
 
 ## Key Patterns
@@ -218,20 +227,67 @@ databaseHooks: {
 // 401: UNAUTHORIZED | 400: VALIDATION_ERROR + details | 500: INTERNAL_ERROR
 ```
 
+### Category Management Patterns
+
+**Empty groups trong danh sách:**
+```typescript
+// CategoriesPage.tsx — seed tất cả groups (kể cả rỗng) rồi fill categories
+function groupByGroup(groups: CategoryGroup[], cats: CategoryWithGroup[]): GroupedCategories[] {
+  const map = new Map<string, GroupedCategories>()
+  for (const g of groups) map.set(g.id, { group: g, categories: [] })  // seed empty
+  for (const cat of cats) { ... map.get(cat.group.id)!.categories.push(cat) }
+  return Array.from(map.values()).sort(...)
+}
+// Dùng useCategoryGroups(activeTab) để lấy all groups, kể cả 0 categories
+```
+
+**Delete category với replacement:**
+```typescript
+// Frontend fetch count trước khi mở dialog
+const handleDeleteClick = async (cat) => {
+  const res = await apiClient<{ meta: { total: number } }>(`/transactions?categoryId=${cat.id}&limit=1`)
+  setDeleteCat({ cat, transactionCount: res.meta.total })
+}
+// Backend: nếu count > 0 và không có replacement → throw 400
+// Backend: UPDATE transactions SET categoryId=replacement WHERE categoryId=deleted → DELETE category
+```
+
+**Service error throws:**
+```typescript
+// Service: throw với status property
+throw Object.assign(new Error('Không tìm thấy'), { status: 404 })
+throw Object.assign(new Error('Tên đã tồn tại'), { status: 409 })
+// errorHandler.ts: check (err as { status?: number }).status → trả 400/404/409
+```
+
+**CategoryForm 2 component riêng (tránh RHF type conflict):**
+```typescript
+// react-hook-form register<FormSchema> có type cứng với schema
+// → CreateForm dùng register<CreateCategoryInput>, EditForm dùng register<UpdateCategoryInput>
+// → KHÔNG chia sẻ NameField component giữa 2 form (type incompatibility)
+function CreateForm(props) { const { register } = useForm<CreateCategoryInput>() }
+function EditForm(props) { const { register } = useForm<UpdateCategoryInput>() }
+export default function CategoryForm({ mode, ... }) {
+  if (mode === 'edit') return <EditForm ... />
+  return <CreateForm ... />
+}
+```
+
 ## Cache Invalidation (TanStack Query)
 | Mutation | Keys bị invalidate |
 |:---|:---|
 | transaction CRUD | `QUERY_KEYS.transactions`, `QUERY_KEYS.dashboard` |
 | profile update | `QUERY_KEYS.profile` |
-| category CRUD | `['categories']` |
+| category CRUD | `['categories']`, `['transactions']` |
+| category group CRUD | `['category-groups']`, `['categories']` |
 | wallet CRUD | `['wallets']`, `QUERY_KEYS.dashboard` |
 
 ## Routing
 ```
 Public:    /login, /register
-Protected: / (Dashboard), /settings, /transactions
+Protected: / (Dashboard), /settings, /transactions, /categories
 Guard: ProtectedRoute → useSession() → isPending→spinner, !session→/login, session→Outlet
-Layout: AppLayout → Header (nav: Dashboard/Giao dịch/Cài đặt + email + Đăng xuất) + main Outlet
+Layout: AppLayout → Header (nav: Dashboard/Giao dịch/Danh mục/Cài đặt + email + Đăng xuất)
 ```
 
 ## Format Utilities
