@@ -41,12 +41,14 @@ import transactionRoutes from './routes/transactions'
 import categoriesRoutes from './routes/categories'
 import categoryGroupsRoutes from './routes/category-groups'
 import walletsRoutes from './routes/wallets'
+import dashboardRoutes from './routes/dashboard'
 
 app.route('/api/settings', settingsRoutes)
 app.route('/api/transactions', transactionRoutes)
 app.route('/api/categories', categoriesRoutes)
 app.route('/api/category-groups', categoryGroupsRoutes)
 app.route('/api/wallets', walletsRoutes)
+app.route('/api/dashboard', dashboardRoutes)
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {

@@ -175,3 +175,42 @@ export interface ApiError {
     code?: string
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+// Dashboard types
+// ═══════════════════════════════════════════════════════════
+export interface TopExpenseCategory {
+  categoryId: string | null
+  categoryName: string
+  categoryIcon: string | null
+  categoryColor: string | null
+  amount: number
+  percentage: number
+}
+
+export interface MonthlyChartPoint {
+  month: string // YYYY-MM
+  income: number
+  expense: number
+}
+
+export interface BudgetProgressItem {
+  categoryId: string
+  categoryName: string
+  limit: number
+  spent: number
+}
+
+export interface DashboardData {
+  totalIncome: number
+  totalExpense: number
+  netAmount: number
+  prevMonthIncome: number
+  prevMonthExpense: number
+  totalBalance: number
+  netWorth: number | null
+  recentTransactions: TransactionWithRelations[]
+  topExpenseCategories: TopExpenseCategory[]
+  monthlyChart: MonthlyChartPoint[]
+  budgetProgress: BudgetProgressItem[] | null
+}
