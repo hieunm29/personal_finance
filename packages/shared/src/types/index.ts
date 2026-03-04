@@ -107,6 +107,37 @@ export interface CategoryBudgetWithSpent extends CategoryBudget {
   spent: number // cents
 }
 
+export interface CategoryBudgetWithProgress {
+  id: string
+  budgetId: string
+  categoryId: string
+  limitAmount: number // cents
+  category: { id: string; name: string; icon: string | null; color: string | null }
+  spent: number // cents
+  remaining: number // cents (có thể âm nếu vượt)
+  percentage: number // 0-100+
+}
+
+export interface BudgetWithProgress {
+  id: string
+  userId: string
+  month: string
+  totalLimit: number // cents
+  createdAt: string
+  updatedAt: string
+  totalSpent: number // cents
+  remaining: number // cents
+  percentage: number // 0-100+
+  categories: CategoryBudgetWithProgress[]
+}
+
+export interface BudgetHistory {
+  month: string // YYYY-MM
+  totalLimit: number // cents
+  totalSpent: number // cents
+  overage: number // cents: dương = vượt, âm = còn dư
+}
+
 export interface Asset {
   id: string
   userId: string

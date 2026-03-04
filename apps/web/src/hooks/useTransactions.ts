@@ -46,6 +46,7 @@ export function useCreateTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.transactions })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgets })
     },
   })
 }
@@ -66,6 +67,7 @@ export function useUpdateTransaction(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.transactions })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgets })
     },
   })
 }
@@ -78,6 +80,7 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.transactions })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgets })
     },
   })
 }

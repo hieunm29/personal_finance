@@ -53,6 +53,11 @@ export default function MonthlyChart({ data, currency }: Props) {
     },
     scales: {
       y: {
+        max:
+          data.length === 0
+            ? 10_000_000
+            : Math.max(...data.map((d) => d.income / 100), ...data.map((d) => d.expense / 100)) +
+              10_000_000,
         ticks: {
           callback: (v: unknown) => formatCurrency((v as number) * 100, currency),
         },

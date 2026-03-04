@@ -67,7 +67,9 @@ Request → logger() → cors() → /api/health (bypass)
                             → /api/settings/**    (settingsRoutes)
                             → /api/transactions/** (transactionRoutes)
                             → /api/categories/**  (categoryRoutes)
+                            → /api/category-groups/** (categoryGroupRoutes)
                             → /api/wallets/**     (walletRoutes)
+                            → /api/budgets/**     (budgetRoutes)
 ```
 
 ## Env Vars

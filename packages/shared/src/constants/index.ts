@@ -111,6 +111,8 @@ export const QUERY_KEYS = {
   categoryGroups: ['category-groups'] as const,
   wallets: ['wallets'] as const,
   budgets: ['budgets'] as const,
+  budgetProgress: ['budgets', 'progress'] as const,
+  budgetHistory: ['budgets', 'history'] as const,
   assets: ['assets'] as const,
   reports: ['reports'] as const,
 } as const

@@ -1,8 +1,8 @@
 # Tiến độ (Progress)
 
 ## Trạng thái Hiện tại
-**Giai đoạn:** Phase 1 MVP — Transaction Engine hoàn thành (US-TXN-01 → 07)
-**Cập nhật:** 2026-03-02
+**Giai đoạn:** Phase 1 MVP — Budget Planner hoàn thành (US-BUD-01→07) + Dashboard integration fixed
+**Cập nhật:** 2026-03-04
 
 ---
 
@@ -139,17 +139,55 @@
 - [x] Nhóm rỗng hiện trong danh sách (useCategoryGroups seed vào groupByGroup)
 - [x] Nhóm tùy chỉnh có nút ✏️ trên group header
 
+### Phase 1 — Budget Planner (US-BUD-01 → 07) ✅
+
+#### Phần 0 — Infrastructure chung ✅
+- [x] `packages/shared/src/schemas/index.ts` — createBudgetSchema, updateBudgetSchema, categoryBudgetItemSchema, copyPreviousBudgetSchema, budgetFilterSchema
+- [x] `packages/shared/src/types/index.ts` — Budget, CategoryBudget, CategoryBudgetWithProgress, BudgetWithProgress, BudgetHistory
+- [x] `packages/shared/src/constants/index.ts` — QUERY_KEYS.budgets / budgetProgress / budgetHistory
+- [x] `apps/server/src/services/budgetService.ts` — get, upsert, update, delete, copyPrevious, getProgress, getHistory
+- [x] `apps/server/src/routes/budget.ts` — 7 endpoints (/,/:id,/copy-previous,/progress,/history)
+- [x] `apps/server/src/index.ts` — mount /api/budgets
+- [x] `apps/web/src/hooks/useBudget.ts` — 7 hooks (query + mutation)
+- [x] `apps/web/src/pages/BudgetPage.tsx` — full page
+- [x] `apps/web/src/App.tsx` — route /budget
+- [x] `apps/web/src/components/layout/AppLayout.tsx` — nav "Ngân sách" 🎯
+
+#### US-BUD-01: Tạo ngân sách tổng thể tháng ✅
+- [x] BudgetFormModal.tsx — create/edit mode, month selector, totalLimit input
+- [x] BudgetPage — empty state + summary cards (4 cards)
+
+#### US-BUD-02: Đặt ngân sách theo danh mục ✅
+- [x] BudgetFormModal — category list với per-category limit inputs
+- [x] Warning khi tổng category > totalLimit
+
+#### US-BUD-03: Theo dõi tiến độ real-time ✅
+- [x] CategoryBudgetList.tsx — progress bars (green/amber/red)
+- [x] useTransactions invalidates `['budgets']` prefix sau mutation
+
+#### US-BUD-04: Cảnh báo vượt ngân sách ✅
+- [x] BudgetProgressCard dashboard — warning badges amber/red
+- [x] **Bug fix:** dashboardService.ts hardcoded null → tích hợp getBudgetProgress
+
+#### US-BUD-05: Sao chép ngân sách tháng trước ✅
+- [x] copyPrevious service + POST /copy-previous route
+- [x] BudgetFormModal checkbox "Sao chép từ tháng trước"
+- [x] BudgetPage nút "Sao chép tháng trước" trong empty state
+
+#### US-BUD-06: Xem lịch sử ngân sách ✅
+- [x] getHistory service + GET /history route
+- [x] BudgetHistoryList.tsx — table, hover CSS, click → onSelectMonth
+
+#### US-BUD-07: Biểu đồ ngân sách vs thực tế ✅
+- [x] BudgetChart.tsx — Chart.js horizontal bar, màu theo ngưỡng, max-height 600px
+
 ---
 
-## 🔲 Còn Lại — Phase 1 MVP
+## 🔲 Còn Lại — Phase 2
 
 ### Module 2: Transactions Phase 2
 - [ ] US-TXN-08: Giao dịch định kỳ (recurringService + RecurringPage)
 - [ ] US-TXN-09: Xuất dữ liệu CSV
-
-### Module 4: Dashboard
-- [ ] Backend: dashboardService (tổng thu/chi tháng, số dư)
-- [ ] Frontend: DashboardPage đầy đủ với charts
 
 ---
 

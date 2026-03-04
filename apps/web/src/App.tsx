@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage'
 import SettingsPage from './pages/SettingsPage'
 import TransactionsPage from './pages/TransactionsPage'
 import CategoriesPage from './pages/CategoriesPage'
+import BudgetPage from './pages/BudgetPage'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/transactions/new" element={<TransactionsPage />} />
             <Route path="/transactions/:id/edit" element={<TransactionsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/budget" element={<BudgetPage />} />
           </Route>
         </Route>
       </Routes>

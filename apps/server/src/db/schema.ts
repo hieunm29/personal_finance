@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { relations, sql } from 'drizzle-orm'
 
 // ═══════════════════════════════════════════════════════════
@@ -144,14 +144,18 @@ export const budgets = sqliteTable('budgets', {
   totalLimit: integer('total_limit').notNull(), // stored in cents
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-})
+}, (t) => [
+  uniqueIndex('uniq_budget_user_month').on(t.userId, t.month),
+])
 
 export const categoryBudgets = sqliteTable('category_budgets', {
   id: id(),
   budgetId: text('budget_id').notNull().references(() => budgets.id, { onDelete: 'cascade' }),
   categoryId: text('category_id').notNull().references(() => categories.id),
   limitAmount: integer('limit_amount').notNull(), // stored in cents
-})
+}, (t) => [
+  uniqueIndex('uniq_budget_category').on(t.budgetId, t.categoryId),
+])
 
 export const assets = sqliteTable('assets', {
   id: id(),

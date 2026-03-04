@@ -128,14 +128,34 @@ export const updateWalletSchema = createWalletSchema.partial()
 // ═══════════════════════════════════════════════════════════
 // Budget schemas
 // ═══════════════════════════════════════════════════════════
+export const categoryBudgetItemSchema = z.object({
+  categoryId: z.string().uuid(),
+  limitAmount: z.number().int().positive(),
+})
+
 export const createBudgetSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Định dạng tháng: YYYY-MM'),
-  totalLimit: z.number().positive(),
-  categoryBudgets: z.array(z.object({
-    categoryId: z.string().uuid(),
-    limitAmount: z.number().positive(),
-  })).optional(),
+  totalLimit: z.number().int().positive('Ngân sách phải lớn hơn 0'),
+  categories: z.array(categoryBudgetItemSchema).optional(),
 })
+
+export const updateBudgetSchema = z.object({
+  totalLimit: z.number().int().positive().optional(),
+  categories: z.array(categoryBudgetItemSchema).optional(),
+})
+
+export const copyPreviousBudgetSchema = z.object({
+  targetMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Định dạng tháng: YYYY-MM'),
+})
+
+export const budgetFilterSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'Định dạng tháng: YYYY-MM'),
+})
+
+export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>
+export type CopyPreviousBudgetInput = z.infer<typeof copyPreviousBudgetSchema>
+export type BudgetFilterInput = z.infer<typeof budgetFilterSchema>
+export type CategoryBudgetItem = z.infer<typeof categoryBudgetItemSchema>
 
 // ═══════════════════════════════════════════════════════════
 // Asset schemas

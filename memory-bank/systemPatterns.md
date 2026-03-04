@@ -67,13 +67,17 @@ Personal_Finance/
 │   │   ├── CategoryForm.tsx         # create + edit mode (2 form riêng: CreateForm + EditForm)
 │   │   ├── CategoryGroupForm.tsx    # create + edit mode
 │   │   └── DeleteCategoryDialog.tsx # replacement select khi có transactions
+│   ├── utils/
+│   │   ├── format.ts               # formatCurrency + formatDate
+│   │   └── date.ts                 # getPreviousMonth(YYYY-MM) → YYYY-MM
 │   └── pages/
 │       ├── LoginPage.tsx
 │       ├── RegisterPage.tsx
-│       ├── DashboardPage.tsx        # Placeholder
+│       ├── DashboardPage.tsx        # Summary cards + charts + BudgetProgressCard
 │       ├── SettingsPage.tsx
 │       ├── TransactionsPage.tsx     # List + filter + search + modals
-│       └── CategoriesPage.tsx       # 2 tabs, grouped + empty groups, full CRUD modals
+│       ├── CategoriesPage.tsx       # 2 tabs, grouped + empty groups, full CRUD modals
+│       └── BudgetPage.tsx           # Month selector, empty state, summary, progress, chart, history
 └── apps/server/src/
     ├── index.ts                     # Hono app entry, route mounts
     ├── auth.ts                      # better-auth config + databaseHooks
@@ -83,13 +87,16 @@ Personal_Finance/
     │   ├── seedService.ts           # seedUserData() — profile + categories + wallet
     │   ├── settingsService.ts       # getProfile() + updateProfile()
     │   ├── transactionService.ts    # createTransaction, getTransactions, update, delete
-    │   └── categoryService.ts       # getCategories, getCategoryGroups, CRUD + toggleVisibility + deleteWithReplace
+    │   ├── categoryService.ts       # getCategories, getCategoryGroups, CRUD + toggleVisibility + deleteWithReplace
+    │   ├── budgetService.ts         # get, upsert, update, delete, copyPrevious, getProgress, getHistory
+    │   └── dashboardService.ts      # getDashboardSummary (tích hợp budgetProgress)
     ├── routes/
     │   ├── settings.ts              # GET/PUT /api/settings/profile
     │   ├── transactions.ts          # CRUD /api/transactions
     │   ├── categories.ts            # GET(showHidden)/POST/PUT/:id/PATCH/:id/visibility/DELETE/:id
     │   ├── category-groups.ts       # GET/POST/PUT/:id /api/category-groups
-    │   └── wallets.ts               # GET /api/wallets
+    │   ├── wallets.ts               # GET /api/wallets
+    │   └── budget.ts                # GET/?month, POST/, PUT/:id, DELETE/:id, POST/copy-previous, GET/progress, GET/history
     └── middleware/
         └── errorHandler.ts          # Zod→400, service status→400/404/409, generic→500
 ```
@@ -285,9 +292,54 @@ export default function CategoryForm({ mode, ... }) {
 ## Routing
 ```
 Public:    /login, /register
-Protected: / (Dashboard), /settings, /transactions, /categories
+Protected: / (Dashboard), /settings, /transactions, /categories, /budget
 Guard: ProtectedRoute → useSession() → isPending→spinner, !session→/login, session→Outlet
-Layout: AppLayout → Header (nav: Dashboard/Giao dịch/Danh mục/Cài đặt + email + Đăng xuất)
+Layout: AppLayout → Header (nav: Dashboard/Giao dịch/Danh mục/Ngân sách/Cài đặt + email + Đăng xuất)
+```
+
+## Budget Module Patterns
+
+**Route order (Hono):** Sub-paths phải mount TRƯỚC param route:
+```typescript
+budget.get('/progress', ...) // TRƯỚC /:id
+budget.get('/history', ...)  // TRƯỚC /:id
+budget.post('/copy-previous', ...) // TRƯỚC /:id
+budget.get('/:id', ...)     // Sau cùng
+```
+
+**Month format:** `YYYY-MM` (text), validate bằng zod `.regex(/^\d{4}-\d{2}$/)`
+
+**SQLite date filter trong tháng:**
+```typescript
+// transactions WHERE date LIKE '2026-03-%'
+sql`${transactions.date} LIKE ${month + '-%'}`
+```
+
+**CategoryBudget upsert (DELETE + re-INSERT):**
+```typescript
+// Không dùng ON CONFLICT vì cần xóa categoryBudgets cũ không còn trong list mới
+db.transaction(() => {
+  db.delete(categoryBudgets).where(eq(categoryBudgets.budgetId, budgetId)).run()
+  for (const item of categories) {
+    db.insert(categoryBudgets).values({ budgetId, categoryId: item.categoryId, limitAmount: item.limitAmount }).run()
+  }
+})
+```
+
+**Progress bar thresholds:**
+```typescript
+// < 80%: green | >= 80%: amber | >= 100%: red
+const color = percentage >= 100 ? 'bg-red-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-green-500'
+```
+
+**getPreviousMonth utility:**
+```typescript
+// apps/web/src/utils/date.ts
+export function getPreviousMonth(month: string): string {
+  const [year, mon] = month.split('-').map(Number)
+  const d = new Date(year, mon - 2, 1)  // mon-2 vì month 0-indexed
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 ```
 
 ## Format Utilities

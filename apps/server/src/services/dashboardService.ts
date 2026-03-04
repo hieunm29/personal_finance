@@ -2,6 +2,7 @@ import { eq, and, gte, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../db'
 import { transactions, wallets, categories, userProfiles } from '../db/schema'
 import type { DashboardData, TopExpenseCategory, MonthlyChartPoint, TransactionWithRelations } from '@pf/shared'
+import { getBudgetProgress } from './budgetService'
 
 function getProfileId(authUserId: string): string {
   const p = db.select({ id: userProfiles.id }).from(userProfiles)
@@ -182,6 +183,15 @@ export function getDashboardData(authUserId: string, month: string): DashboardDa
     recentTransactions: recentRows as unknown as TransactionWithRelations[],
     topExpenseCategories,
     monthlyChart,
-    budgetProgress: null,
+    budgetProgress: (() => {
+      const bp = getBudgetProgress(authUserId, month)
+      if (!bp) return null
+      return bp.categories.map(c => ({
+        categoryId: c.categoryId,
+        categoryName: c.category.name,
+        limit: c.limitAmount,
+        spent: c.spent,
+      }))
+    })(),
   }
 }
