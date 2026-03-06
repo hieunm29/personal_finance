@@ -8,6 +8,7 @@ import SettingsPage from './pages/SettingsPage'
 import TransactionsPage from './pages/TransactionsPage'
 import CategoriesPage from './pages/CategoriesPage'
 import BudgetPage from './pages/BudgetPage'
+import AssetsPage from './pages/AssetsPage'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/transactions/:id/edit" element={<TransactionsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/budget" element={<BudgetPage />} />
+            <Route path="/assets" element={<AssetsPage />} />
           </Route>
         </Route>
       </Routes>

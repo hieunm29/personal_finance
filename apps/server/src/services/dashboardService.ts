@@ -3,6 +3,7 @@ import { db } from '../db'
 import { transactions, wallets, categories, userProfiles } from '../db/schema'
 import type { DashboardData, TopExpenseCategory, MonthlyChartPoint, TransactionWithRelations } from '@pf/shared'
 import { getBudgetProgress } from './budgetService'
+import { getNetWorth } from './assetService'
 
 function getProfileId(authUserId: string): string {
   const p = db.select({ id: userProfiles.id }).from(userProfiles)
@@ -179,7 +180,7 @@ export function getDashboardData(authUserId: string, month: string): DashboardDa
     prevMonthIncome,
     prevMonthExpense,
     totalBalance,
-    netWorth: null,
+    netWorth: (() => { try { return getNetWorth(authUserId).netWorth } catch { return null } })(),
     recentTransactions: recentRows as unknown as TransactionWithRelations[],
     topExpenseCategories,
     monthlyChart,

@@ -208,6 +208,28 @@ export interface ApiError {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Asset analytics types
+// ═══════════════════════════════════════════════════════════
+export interface AssetAllocationItem {
+  type: AssetType
+  label: string
+  totalValue: number
+  percentage: number
+}
+
+export interface NetWorthData {
+  netWorth: number
+  totalAssets: number
+  totalDebt: number
+  byType: AssetAllocationItem[]
+}
+
+export interface NetWorthHistoryPoint {
+  month: string // YYYY-MM
+  netWorth: number
+}
+
+// ═══════════════════════════════════════════════════════════
 // Dashboard types
 // ═══════════════════════════════════════════════════════════
 export interface TopExpenseCategory {
