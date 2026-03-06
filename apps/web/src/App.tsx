@@ -9,6 +9,7 @@ import TransactionsPage from './pages/TransactionsPage'
 import CategoriesPage from './pages/CategoriesPage'
 import BudgetPage from './pages/BudgetPage'
 import AssetsPage from './pages/AssetsPage'
+import ReportsPage from './pages/ReportsPage'
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/assets" element={<AssetsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
           </Route>
         </Route>
       </Routes>

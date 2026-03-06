@@ -72,6 +72,7 @@ export interface Transaction {
   amount: number // cents
   categoryId: string
   walletId: string
+  assetId: string | null
   toWalletId: string | null
   date: string
   note: string | null
@@ -84,6 +85,7 @@ export interface TransactionWithRelations extends Transaction {
   category: Category
   wallet: Wallet
   toWallet: Wallet | null
+  asset: Asset | null
 }
 
 export interface Budget {
@@ -180,6 +182,7 @@ export interface RecurringTemplate {
   amount: number // cents
   categoryId: string
   walletId: string
+  assetId: string | null
   note: string | null
   interval: RecurrenceInterval
   startDate: string
@@ -266,4 +269,75 @@ export interface DashboardData {
   topExpenseCategories: TopExpenseCategory[]
   monthlyChart: MonthlyChartPoint[]
   budgetProgress: BudgetProgressItem[] | null
+}
+
+// ═══════════════════════════════════════════════════════════
+// Report types
+// ═══════════════════════════════════════════════════════════
+export interface MonthlyOverview {
+  totalIncome: number
+  totalExpense: number
+  transactionCount: number
+  incomeCount: number
+  expenseCount: number
+  difference: number
+}
+
+export interface MonthComparison {
+  incomeChangePercent: number | null
+  expenseChangePercent: number | null
+}
+
+export interface CategoryExpense {
+  categoryId: string
+  categoryName: string
+  categoryIcon: string | null
+  categoryColor: string | null
+  totalAmount: number
+  percentage: number
+  transactionCount: number
+}
+
+export interface TrendDataPoint {
+  month: string
+  totalIncome: number
+  totalExpense: number
+  averageExpense: number
+}
+
+export interface BudgetComparisonItem {
+  categoryId: string
+  categoryName: string
+  categoryIcon: string | null
+  budgetAmount: number
+  actualAmount: number
+  percentage: number
+}
+
+export interface AnnualSummaryItem {
+  month: string
+  income: number
+  expense: number
+  difference: number
+}
+
+export interface AnnualSummary {
+  monthly: AnnualSummaryItem[]
+  totalIncome: number
+  totalExpense: number
+  averageIncome: number
+  averageExpense: number
+}
+
+export type DateFilterPreset = 'this_week' | 'this_month' | 'this_quarter' | 'this_year' | 'last_month' | 'last_year'
+
+export interface DateRange {
+  startDate: string
+  endDate: string
+}
+
+export interface ReportDateFilter {
+  filter: DateFilterPreset
+  startDate: string
+  endDate: string
 }

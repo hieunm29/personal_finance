@@ -68,7 +68,7 @@ function TransactionRow({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-gray-900">{cat?.name ?? '—'}</p>
           <p className="text-xs text-gray-400">
-            {(txn.wallet as { name: string } | null)?.name ?? '—'}
+            {(txn.wallet as { name: string } | null)?.name ?? (txn.asset as { name: string } | null)?.name ?? '—'}
             {txn.note ? ` · ${txn.note}` : ''}
           </p>
         </div>

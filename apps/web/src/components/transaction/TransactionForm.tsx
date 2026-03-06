@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useForm, useController } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { createTransactionSchema, type CreateTransactionInput, type CategoryWithGroup } from '@pf/shared'
+import { createTransactionSchema, type CreateTransactionInput, type CategoryWithGroup, type Asset } from '@pf/shared'
 import { useCategories } from '../../hooks/useCategories'
 import { useWallets } from '../../hooks/useWallets'
+import { useAssets } from '../../hooks/useAssets'
 import { useCreateTransaction, useUpdateTransaction } from '../../hooks/useTransactions'
+import { formatCurrency } from '../../utils/format'
 
 interface TransactionFormProps {
   mode: 'create' | 'edit'
@@ -64,6 +66,14 @@ function groupByGroup(categories: CategoryWithGroup[]) {
   return Array.from(map.entries())
 }
 
+// ─── Wallet option type ─────────────────────────────────────
+interface WalletOption {
+  id: string
+  name: string
+  type: 'wallet' | 'bank'
+  balance?: number // Only for bank assets
+}
+
 // ─── Main form ───────────────────────────────────────────────
 export default function TransactionForm({
   mode,
@@ -107,11 +117,46 @@ export default function TransactionForm({
 
   const { data: categoriesData, isLoading: catsLoading } = useCategories(selectedType)
   const { data: walletsData, isLoading: walletsLoading } = useWallets()
+  const { data: bankAssetsData, isLoading: bankAssetsLoading } = useAssets('bank')
 
   const groupedCategories = useMemo(
     () => groupByGroup(categoriesData?.data ?? []),
     [categoriesData?.data],
   )
+
+  // Combine wallets and bank assets for the select options
+  const walletOptions = useMemo<{ label: string; options: WalletOption[] }[]>(() => {
+    const options: { label: string; options: WalletOption[] }[] = []
+
+    // Wallets from wallets table
+    if (walletsData?.data) {
+      const walletOptions: WalletOption[] = walletsData.data.map((w) => ({
+        id: w.id,
+        name: w.name,
+        type: 'wallet',
+      }))
+      if (walletOptions.length > 0) {
+        options.push({ label: 'Ví (Tiền mặt)', options: walletOptions })
+      }
+    }
+
+    // Bank assets from assets table
+    if (bankAssetsData?.data) {
+      const bankOptions: WalletOption[] = bankAssetsData.data.map((asset: Asset) => ({
+        id: `asset-${asset.id}`,
+        name: asset.name,
+        type: 'bank',
+        balance: asset.currentValue,
+      }))
+      if (bankOptions.length > 0) {
+        options.push({ label: 'Tài khoản ngân hàng', options: bankOptions })
+      }
+    }
+
+    return options
+  }, [walletsData?.data, bankAssetsData?.data])
+
+  const isLoading = walletsLoading || bankAssetsLoading
 
   const createMutation = useCreateTransaction()
   const updateMutation = useUpdateTransaction(transactionId ?? '')
@@ -193,12 +238,12 @@ export default function TransactionForm({
         )}
       </div>
 
-      {/* Wallet */}
+      {/* Wallet / Bank Account */}
       <div>
         <label htmlFor="walletId" className="block text-sm font-medium text-gray-700 mb-1">
-          Ví
+          Ví / Tài khoản
         </label>
-        {walletsLoading ? (
+        {isLoading ? (
           <div className="h-9 rounded-md bg-gray-100 animate-pulse" />
         ) : (
           <select
@@ -207,10 +252,15 @@ export default function TransactionForm({
             className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">Chọn ví</option>
-            {walletsData?.data.map((wallet) => (
-              <option key={wallet.id} value={wallet.id}>
-                {wallet.name}
-              </option>
+            {walletOptions.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                    {option.balance !== undefined && ` (${formatCurrency(option.balance, 'VND')})`}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         )}

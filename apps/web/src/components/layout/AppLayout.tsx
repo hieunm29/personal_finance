@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/categories': 'Danh mục',
   '/budget': 'Ngân sách',
   '/assets': 'Tài sản',
+  '/reports': 'Báo cáo',
   '/settings': 'Cài đặt',
 }
 
@@ -128,6 +129,7 @@ export default function AppLayout() {
             <SidebarNavItem to="/categories" icon="🗂️" label="Danh mục" />
             <SidebarNavItem to="/budget" icon="🎯" label="Ngân sách" />
             <SidebarNavItem to="/assets" icon="💰" label="Tài sản" />
+            <SidebarNavItem to="/reports" icon="📈" label="Báo cáo" />
           </div>
 
           {/* Section: no label */}

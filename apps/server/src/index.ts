@@ -44,6 +44,7 @@ import walletsRoutes from './routes/wallets'
 import dashboardRoutes from './routes/dashboard'
 import budgetRoutes from './routes/budget'
 import assetRoutes from './routes/assets'
+import reportRoutes from './routes/reports'
 
 app.route('/api/settings', settingsRoutes)
 app.route('/api/transactions', transactionRoutes)
@@ -53,6 +54,7 @@ app.route('/api/wallets', walletsRoutes)
 app.route('/api/dashboard', dashboardRoutes)
 app.route('/api/budgets', budgetRoutes)
 app.route('/api/assets', assetRoutes)
+app.route('/api/reports', reportRoutes)
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {

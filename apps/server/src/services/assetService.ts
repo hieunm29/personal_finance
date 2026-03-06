@@ -158,3 +158,37 @@ export function getNetWorthHistory(authUserId: string, limit?: number): NetWorth
 
   return limit ? result.slice(-limit) : result
 }
+
+/**
+ * Update asset balance by adding or subtracting amount.
+ * Used when transactions affect bank account balances.
+ */
+export function updateAssetBalance(
+  authUserId: string,
+  assetId: string,
+  amount: number,
+  isIncome: boolean
+): Asset {
+  const profileId = getProfileId(authUserId)
+  const asset = db.select().from(assets).where(eq(assets.id, assetId)).get()
+  if (!asset || asset.userId !== profileId) {
+    throw Object.assign(new Error('Asset not found'), { status: 404 })
+  }
+
+  // Calculate new value: add for income, subtract for expense
+  const newValue = isIncome
+    ? asset.currentValue + amount
+    : asset.currentValue - amount
+
+  // Update asset value and add history record
+  db.update(assets).set({ currentValue: newValue, updatedAt: sql`(datetime('now'))` }).where(eq(assets.id, assetId)).run()
+
+  db.insert(assetHistory).values({
+    id: crypto.randomUUID(),
+    assetId,
+    value: newValue,
+    date: new Date().toLocaleDateString('sv'),
+  }).run()
+
+  return db.select().from(assets).where(eq(assets.id, assetId)).get()! as unknown as Asset
+}

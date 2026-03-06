@@ -40,12 +40,20 @@ export const changePasswordSchema = z
 // ═══════════════════════════════════════════════════════════
 // Transaction schemas
 // ═══════════════════════════════════════════════════════════
+// Wallet ID: UUID cho wallet thường, hoặc 'asset-' + UUID cho bank asset
+const walletIdSchema = z
+  .string()
+  .refine(
+    (val) => z.string().uuid().safeParse(val).success || (val.startsWith('asset-') && z.string().uuid().safeParse(val.slice(6)).success),
+    'Wallet ID không hợp lệ'
+  )
+
 export const createTransactionSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']),
   amount: z.number().positive('Số tiền phải lớn hơn 0'),
   categoryId: z.string().uuid('Category ID không hợp lệ'),
-  walletId: z.string().uuid('Wallet ID không hợp lệ'),
-  toWalletId: z.string().uuid().optional(),
+  walletId: walletIdSchema,
+  toWalletId: walletIdSchema.optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày: YYYY-MM-DD'),
   note: z.string().max(500).optional(),
   isRecurring: z.boolean().default(false),
@@ -70,7 +78,7 @@ export const createRecurringSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']),
   amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
   categoryId: z.string().uuid('Category ID không hợp lệ'),
-  walletId: z.string().uuid('Wallet ID không hợp lệ'),
+  walletId: walletIdSchema,
   note: z.string().max(500).optional(),
   interval: z.enum(['weekly', 'monthly', 'yearly']),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày: YYYY-MM-DD'),

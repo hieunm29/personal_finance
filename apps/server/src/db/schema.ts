@@ -112,7 +112,8 @@ export const transactions = sqliteTable('transactions', {
   type: text('type').notNull(), // 'income' | 'expense' | 'transfer'
   amount: integer('amount').notNull(), // stored in cents
   categoryId: text('category_id').notNull().references(() => categories.id),
-  walletId: text('wallet_id').notNull().references(() => wallets.id),
+  walletId: text('wallet_id').references(() => wallets.id), // nullable for bank asset transactions
+  assetId: text('asset_id').references(() => assets.id), // for bank asset transactions
   toWalletId: text('to_wallet_id').references(() => wallets.id),
   date: text('date').notNull(), // YYYY-MM-DD
   note: text('note'),
@@ -128,6 +129,7 @@ export const recurringTemplates = sqliteTable('recurring_templates', {
   amount: integer('amount').notNull(), // stored in cents
   categoryId: text('category_id').notNull().references(() => categories.id),
   walletId: text('wallet_id').notNull().references(() => wallets.id),
+  assetId: text('asset_id').notNull().references(() => assets.id), // for recurring templates
   note: text('note'),
   interval: text('interval').notNull(), // 'weekly' | 'monthly' | 'yearly'
   startDate: text('start_date').notNull(), // YYYY-MM-DD
@@ -208,6 +210,7 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
   category: one(categories, { fields: [transactions.categoryId], references: [categories.id] }),
   wallet: one(wallets, { fields: [transactions.walletId], references: [wallets.id] }),
   toWallet: one(wallets, { fields: [transactions.toWalletId], references: [wallets.id] }),
+  asset: one(assets, { fields: [transactions.assetId], references: [assets.id] }),
 }))
 
 export const budgetsRelations = relations(budgets, ({ one, many }) => ({

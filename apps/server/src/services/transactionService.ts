@@ -1,7 +1,8 @@
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../db'
-import { transactions, categories, wallets, userProfiles } from '../db/schema'
+import { transactions, categories, wallets, userProfiles, assets } from '../db/schema'
 import type { CreateTransactionInput, UpdateTransactionInput, TransactionFilter } from '@pf/shared'
+import { updateAssetBalance } from './assetService'
 
 // Resolve authUserId → userProfile.id
 function getProfileId(authUserId: string): string {
@@ -24,24 +25,52 @@ export function createTransaction(authUserId: string, data: CreateTransactionInp
   if (!category) throw Object.assign(new Error('Category not found'), { status: 404 })
   if (category.type !== data.type) throw Object.assign(new Error('Category type mismatch'), { status: 400 })
 
-  const wallet = db.select().from(wallets)
-    .where(and(eq(wallets.id, data.walletId), eq(wallets.userId, profileId)))
-    .get()
-  if (!wallet) throw Object.assign(new Error('Wallet not found'), { status: 404 })
+  // Check if walletId is a bank asset (prefix 'asset-')
+  let isBankAsset = false
+  let bankAssetId = ''
+  if (data.walletId.startsWith('asset-')) {
+    const assetId = data.walletId.slice(6) // Remove 'asset-' prefix
+    const asset = db.select().from(assets).where(eq(assets.id, assetId)).get()
+    if (!asset) throw Object.assign(new Error('Asset not found'), { status: 404 })
+    if (asset.userId !== profileId) throw Object.assign(new Error('Asset not found'), { status: 404 })
+    if (asset.type !== 'bank') throw Object.assign(new Error('Wallet must be a bank asset'), { status: 400 })
+    isBankAsset = true
+    bankAssetId = assetId
+  } else {
+    const wallet = db.select().from(wallets)
+      .where(and(eq(wallets.id, data.walletId), eq(wallets.userId, profileId)))
+      .get()
+    if (!wallet) throw Object.assign(new Error('Wallet not found'), { status: 404 })
+  }
 
   const id = crypto.randomUUID()
+  // For bank assets, save null to walletId (FK constraint), store asset reference in assetId
+  const finalWalletId = isBankAsset ? null : data.walletId
+  const finalAssetId = isBankAsset ? bankAssetId : null
   db.insert(transactions).values({
     id,
     userId: profileId,
     type: data.type,
     amount: data.amount,
     categoryId: data.categoryId,
-    walletId: data.walletId,
+    walletId: finalWalletId,
+    assetId: finalAssetId,
     toWalletId: data.toWalletId ?? null,
     date: data.date,
     note: data.note ?? null,
     isRecurring: data.isRecurring ?? false,
   }).run()
+
+  // Update bank asset balance if applicable (only for income/expense, not transfer)
+  if (isBankAsset && (data.type === 'income' || data.type === 'expense')) {
+    try {
+      const isIncome = data.type === 'income'
+      updateAssetBalance(authUserId, bankAssetId, data.amount, isIncome)
+    } catch (err) {
+      console.error('Failed to update asset balance:', err)
+      // Transaction still created, but balance not updated - log error but don't fail
+    }
+  }
 
   return getTransactionById(authUserId, id)
 }
@@ -57,6 +86,7 @@ export function getTransactionById(authUserId: string, id: string) {
       amount: transactions.amount,
       categoryId: transactions.categoryId,
       walletId: transactions.walletId,
+      assetId: transactions.assetId,
       toWalletId: transactions.toWalletId,
       date: transactions.date,
       note: transactions.note,
@@ -86,10 +116,17 @@ export function getTransactionById(authUserId: string, id: string) {
         createdAt: wallets.createdAt,
         updatedAt: wallets.updatedAt,
       },
+      asset: {
+        id: assets.id,
+        name: assets.name,
+        type: assets.type,
+        currentValue: assets.currentValue,
+      },
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(wallets, eq(transactions.walletId, wallets.id))
+    .leftJoin(assets, eq(transactions.assetId, assets.id))
     .where(and(eq(transactions.id, id), eq(transactions.userId, profileId)))
     .get()
 
@@ -121,6 +158,7 @@ export function getTransactions(authUserId: string, filters: TransactionFilter) 
     amount: transactions.amount,
     categoryId: transactions.categoryId,
     walletId: transactions.walletId,
+    assetId: transactions.assetId,
     toWalletId: transactions.toWalletId,
     date: transactions.date,
     note: transactions.note,
@@ -150,6 +188,12 @@ export function getTransactions(authUserId: string, filters: TransactionFilter) 
       createdAt: wallets.createdAt,
       updatedAt: wallets.updatedAt,
     },
+    asset: {
+      id: assets.id,
+      name: assets.name,
+      type: assets.type,
+      currentValue: assets.currentValue,
+    },
   }
 
   const baseQuery = db
@@ -157,6 +201,7 @@ export function getTransactions(authUserId: string, filters: TransactionFilter) 
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(wallets, eq(transactions.walletId, wallets.id))
+    .leftJoin(assets, eq(transactions.assetId, assets.id))
     .where(where)
     .orderBy(desc(transactions.date), desc(transactions.createdAt))
 
