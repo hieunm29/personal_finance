@@ -32,6 +32,60 @@ export default function UpdateValueModal({ isOpen, onClose, asset }: Props) {
 
   if (!isOpen || !asset) return null
 
+  if (asset.type === 'gold') {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose()
+        }}
+      >
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '24px',
+            width: '360px',
+            maxWidth: '90vw',
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+            Cập nhật giá trị
+          </h2>
+          <p style={{ margin: '12px 0 0', fontSize: '14px', color: '#475569', lineHeight: 1.5 }}>
+            Giá trị vàng được tính từ giá 1 lượng vàng trong phần Tổng quan vàng. Hãy chỉnh số lượng ở màn sửa tài sản hoặc cập nhật giá vàng trong tab vàng.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '8px 20px',
+                background: '#4f46e5',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!asset) return

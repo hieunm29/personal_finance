@@ -8,6 +8,13 @@
       "when": 1772367849757,
       "tag": "0000_same_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1774798669066,
+      "tag": "0001_sticky_maverick",
+      "breakpoints": true
     }
   ]
 }

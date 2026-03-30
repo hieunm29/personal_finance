@@ -5,6 +5,7 @@ export type TransactionType = 'income' | 'expense' | 'transfer'
 export type CategoryType = 'income' | 'expense'
 export type WalletType = 'cash' | 'bank' | 'e-wallet'
 export type AssetType = 'cash' | 'bank' | 'gold' | 'stock' | 'savings' | 'real_estate' | 'debt'
+export type GoldUnit = 'chi' | 'luong'
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'yearly'
 export type ThemePreference = 'light' | 'dark' | 'system'
 
@@ -17,8 +18,14 @@ export interface UserProfile {
   displayName: string | null
   currency: string
   theme: ThemePreference
+  goldPricePerLuong: number | null
   createdAt: string
   updatedAt: string
+}
+
+export interface GoldAssetMetadata {
+  unit: GoldUnit
+  quantity: number
 }
 
 export interface CategoryGroup {
@@ -263,7 +270,7 @@ export interface DashboardData {
   netAmount: number
   prevMonthIncome: number
   prevMonthExpense: number
-  totalBalance: number
+  totalAssets: number
   netWorth: number | null
   recentTransactions: TransactionWithRelations[]
   topExpenseCategories: TopExpenseCategory[]

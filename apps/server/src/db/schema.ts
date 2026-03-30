@@ -66,6 +66,7 @@ export const userProfiles = sqliteTable('user_profiles', {
   displayName: text('display_name'),
   currency: text('currency').notNull().default('VND'),
   theme: text('theme').notNull().default('system'), // 'light' | 'dark' | 'system'
+  goldPricePerLuong: integer('gold_price_per_luong'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 })

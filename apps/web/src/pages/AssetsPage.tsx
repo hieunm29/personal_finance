@@ -1,12 +1,16 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { QUERY_KEYS, type UserProfile } from '@pf/shared'
 import type { Asset, AssetType } from '@pf/shared'
 import { formatCurrency } from '../utils/format'
 import { useAssets, useNetWorth, useNetWorthHistory, useDeleteAsset } from '../hooks/useAssets'
 import AssetPieChart from '../components/assets/AssetPieChart'
 import NetWorthChart from '../components/assets/NetWorthChart'
 import AssetList from '../components/assets/AssetList'
+import GoldOverviewCard from '../components/assets/GoldOverviewCard'
 import AssetFormModal from '../components/assets/AssetFormModal'
 import UpdateValueModal from '../components/assets/UpdateValueModal'
+import { apiClient } from '../services/apiClient'
 
 const TAB_TYPES: Record<string, string[]> = {
   cash: ['cash', 'bank'],
@@ -46,13 +50,19 @@ export default function AssetsPage() {
   const { data: allAssetsResp } = useAssets()
   const { data: netWorthResp } = useNetWorth()
   const { data: historyResp } = useNetWorthHistory()
+  const { data: profileRes } = useQuery({
+    queryKey: QUERY_KEYS.profile,
+    queryFn: () => apiClient<{ data: UserProfile }>('/settings/profile'),
+  })
   const deleteAsset = useDeleteAsset()
 
   const allAssets = allAssetsResp?.data ?? []
   const netWorthData = netWorthResp?.data
   const history = historyResp?.data ?? []
+  const goldPricePerLuong = profileRes?.data?.goldPricePerLuong ?? null
 
   const filteredAssets = allAssets.filter((a) => TAB_TYPES[activeTab]?.includes(a.type))
+  const goldAssets = allAssets.filter((a) => a.type === 'gold')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -168,8 +178,16 @@ export default function AssetsPage() {
           ))}
         </div>
 
+        {activeTab === 'gold' && (
+          <GoldOverviewCard
+            goldAssets={goldAssets}
+            goldPricePerLuong={goldPricePerLuong}
+          />
+        )}
+
         <AssetList
           assets={filteredAssets}
+          goldPricePerLuong={goldPricePerLuong}
           onEdit={setEditingAsset}
           onDelete={(asset) => {
             if (confirm(`Xóa "${asset.name}"?`)) deleteAsset.mutate(asset.id)

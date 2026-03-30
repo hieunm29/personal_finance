@@ -129,3 +129,14 @@ export const ROUTES = {
   reports: '/reports',
   settings: '/settings',
 } as const
+
+export const REPORTS_ROUTES = {
+  overview: '/reports/overview',
+  categories: '/reports/categories',
+  trend: '/reports/trend',
+  budgetComparison: '/reports/budget-comparison',
+  assetAllocation: '/reports/asset-allocation',
+  networthHistory: '/reports/networth-history',
+  topExpenses: '/reports/top-expenses',
+  annual: '/reports/annual',
+} as const

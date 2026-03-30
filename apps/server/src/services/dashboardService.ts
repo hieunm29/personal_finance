@@ -1,7 +1,13 @@
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../db'
 import { transactions, wallets, categories, userProfiles } from '../db/schema'
-import type { DashboardData, TopExpenseCategory, MonthlyChartPoint, TransactionWithRelations } from '@pf/shared'
+import type {
+  DashboardData,
+  TopExpenseCategory,
+  MonthlyChartPoint,
+  TransactionWithRelations,
+  NetWorthData,
+} from '@pf/shared'
 import { getBudgetProgress } from './budgetService'
 import { getNetWorth } from './assetService'
 
@@ -15,6 +21,10 @@ function getProfileId(authUserId: string): string {
 function getMonthRange(month: string) {
   const [y, m] = month.split('-').map(Number)
   return { start: `${month}-01`, end: new Date(y, m, 0).toLocaleDateString('sv') }
+}
+
+export function getDashboardTotalAssets(netWorthData: NetWorthData | null): number {
+  return netWorthData?.totalAssets ?? 0
 }
 
 export function getDashboardData(authUserId: string, month: string): DashboardData {
@@ -48,19 +58,13 @@ export function getDashboardData(authUserId: string, month: string): DashboardDa
     .where(and(eq(transactions.userId, profileId), eq(transactions.type, 'expense'),
       gte(transactions.date, prevStart), lte(transactions.date, prevEnd))).get()!.v
 
-  // Total balance (all-time)
-  const walletInit = db.select({ v: sql<number>`COALESCE(SUM(initial_balance), 0)` })
-    .from(wallets).where(eq(wallets.userId, profileId)).get()!.v
-
-  const allIncome = db.select({ v: sql<number>`COALESCE(SUM(amount), 0)` })
-    .from(transactions)
-    .where(and(eq(transactions.userId, profileId), eq(transactions.type, 'income'))).get()!.v
-
-  const allExpense = db.select({ v: sql<number>`COALESCE(SUM(amount), 0)` })
-    .from(transactions)
-    .where(and(eq(transactions.userId, profileId), eq(transactions.type, 'expense'))).get()!.v
-
-  const totalBalance = walletInit + allIncome - allExpense
+  const netWorthData = (() => {
+    try {
+      return getNetWorth(authUserId)
+    } catch {
+      return null
+    }
+  })()
 
   // Recent 5 transactions
   const recentRows = db.select({
@@ -179,8 +183,8 @@ export function getDashboardData(authUserId: string, month: string): DashboardDa
     netAmount: totalIncome - totalExpense,
     prevMonthIncome,
     prevMonthExpense,
-    totalBalance,
-    netWorth: (() => { try { return getNetWorth(authUserId).netWorth } catch { return null } })(),
+    totalAssets: getDashboardTotalAssets(netWorthData),
+    netWorth: netWorthData?.netWorth ?? null,
     recentTransactions: recentRows as unknown as TransactionWithRelations[],
     topExpenseCategories,
     monthlyChart,

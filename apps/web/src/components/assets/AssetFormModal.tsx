@@ -1,7 +1,15 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import type { Asset, AssetType } from '@pf/shared'
+import { useQuery } from '@tanstack/react-query'
+import { QUERY_KEYS, type Asset, type AssetType, type UserProfile } from '@pf/shared'
 import { useCreateAsset, useUpdateAsset } from '../../hooks/useAssets'
+import { apiClient } from '../../services/apiClient'
+import { formatCurrency } from '../../utils/format'
+import {
+  calculateGoldValueFromPrice,
+  getGoldPriceStatusMessage,
+  parseGoldMetadata,
+} from '../../utils/gold'
 
 const TYPE_LABELS: Record<string, string> = {
   cash: '💵 Tiền mặt',
@@ -30,7 +38,6 @@ interface FormValues {
   // gold
   goldUnit: 'chi' | 'luong'
   goldQty: number
-  goldBuyPrice: number
   // stock
   ticker: string
   stockQty: number
@@ -86,7 +93,6 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
       bankName: '',
       goldUnit: 'chi',
       goldQty: 0,
-      goldBuyPrice: 0,
       ticker: '',
       stockQty: 1,
       stockAvgBuyPrice: 0,
@@ -104,33 +110,49 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
   })
 
   const type = watch('type')
+  const goldUnit = watch('goldUnit')
+  const goldQty = watch('goldQty')
+  const { data: profileRes } = useQuery({
+    queryKey: QUERY_KEYS.profile,
+    queryFn: () => apiClient<{ data: UserProfile }>('/settings/profile'),
+  })
+  const goldPricePerLuong = profileRes?.data?.goldPricePerLuong ?? null
+  const goldPriceStatusMessage = type === 'gold' ? getGoldPriceStatusMessage(goldPricePerLuong) : null
+  const hasValidGoldQty = typeof goldQty === 'number' && Number.isFinite(goldQty) && goldQty >= 0
+  const goldQtyStatusMessage = type === 'gold' && !hasValidGoldQty
+    ? 'Số lượng vàng không hợp lệ'
+    : null
+  const goldDerivedValue = type === 'gold' && goldPricePerLuong && hasValidGoldQty
+    ? calculateGoldValueFromPrice(goldUnit, goldQty, goldPricePerLuong)
+    : null
+  const goldFormStatusMessage = goldPriceStatusMessage ?? goldQtyStatusMessage
 
   useEffect(() => {
     if (!isOpen) return
     if (asset) {
-      const meta = asset.metadata ? (JSON.parse(asset.metadata) as Record<string, unknown>) : {}
+      const meta = parseGoldMetadata(asset.metadata)
+      const rawMeta = asset.metadata ? (JSON.parse(asset.metadata) as Record<string, unknown>) : {}
       reset({
         name: asset.name,
         type: asset.type,
         currentValueDisplay: asset.currentValue / 100,
         note: asset.note ?? '',
-        bankName: (meta.bankName as string) ?? '',
-        goldUnit: ((meta.unit as string) ?? 'chi') as 'chi' | 'luong',
-        goldQty: ((meta.quantity as number) ?? 0),
-        goldBuyPrice: ((meta.buyPrice as number) ?? 0) / 100,
-        ticker: (meta.ticker as string) ?? '',
-        stockQty: (meta.quantity as number) ?? 1,
-        stockAvgBuyPrice: ((meta.avgBuyPrice as number) ?? 0) / 100,
-        savingsBankName: (meta.bankName as string) ?? '',
-        savingsDepositAmount: ((meta.depositAmount as number) ?? 0) / 100,
-        savingsInterestRate: (meta.interestRate as number) ?? 0,
-        savingsTerm: (meta.term as number) ?? 12,
-        savingsDepositDate: (meta.depositDate as string) ?? '',
-        address: (meta.address as string) ?? '',
-        debtOriginalAmount: ((meta.originalAmount as number) ?? 0) / 100,
-        debtInterestRate: (meta.interestRate as number) ?? 0,
-        debtStartDate: (meta.startDate as string) ?? '',
-        debtTerm: (meta.term as number) ?? 12,
+        bankName: (rawMeta.bankName as string) ?? '',
+        goldUnit: meta?.unit ?? 'chi',
+        goldQty: meta?.quantity ?? 0,
+        ticker: (rawMeta.ticker as string) ?? '',
+        stockQty: (rawMeta.quantity as number) ?? 1,
+        stockAvgBuyPrice: ((rawMeta.avgBuyPrice as number) ?? 0) / 100,
+        savingsBankName: (rawMeta.bankName as string) ?? '',
+        savingsDepositAmount: ((rawMeta.depositAmount as number) ?? 0) / 100,
+        savingsInterestRate: (rawMeta.interestRate as number) ?? 0,
+        savingsTerm: (rawMeta.term as number) ?? 12,
+        savingsDepositDate: (rawMeta.depositDate as string) ?? '',
+        address: (rawMeta.address as string) ?? '',
+        debtOriginalAmount: ((rawMeta.originalAmount as number) ?? 0) / 100,
+        debtInterestRate: (rawMeta.interestRate as number) ?? 0,
+        debtStartDate: (rawMeta.startDate as string) ?? '',
+        debtTerm: (rawMeta.term as number) ?? 12,
       })
     } else {
       reset({
@@ -141,7 +163,6 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
         bankName: '',
         goldUnit: 'chi',
         goldQty: 0,
-        goldBuyPrice: 0,
         ticker: '',
         stockQty: 1,
         stockAvgBuyPrice: 0,
@@ -161,12 +182,7 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
 
   function buildMetadata(t: AssetType, d: FormValues): Record<string, unknown> | null {
     if (t === 'bank') return { bankName: d.bankName }
-    if (t === 'gold')
-      return {
-        unit: d.goldUnit,
-        quantity: d.goldQty,
-        buyPrice: Math.round(d.goldBuyPrice * 100),
-      }
+    if (t === 'gold') return { unit: d.goldUnit, quantity: d.goldQty }
     if (t === 'stock')
       return {
         ticker: d.ticker.toUpperCase(),
@@ -194,10 +210,18 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
 
   const onSubmit = handleSubmit(async (d) => {
     const metadataObj = buildMetadata(d.type, d)
+    const currentValue = d.type === 'gold'
+      ? undefined
+      : Math.round(d.currentValueDisplay * 100)
+
+    if (d.type === 'gold' && (goldDerivedValue == null || !Number.isFinite(goldDerivedValue))) {
+      return
+    }
+
     const payload = {
       type: d.type,
       name: d.name,
-      currentValue: Math.round(d.currentValueDisplay * 100),
+      ...(currentValue !== undefined ? { currentValue } : {}),
       metadata: metadataObj ? JSON.stringify(metadataObj) : undefined,
       note: d.note || undefined,
     }
@@ -280,17 +304,19 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
             </select>
           </div>
 
-          <div style={fieldStyle}>
-            <label style={labelStyle}>Giá trị hiện tại (VND) *</label>
-            <input
-              {...register('currentValueDisplay', { valueAsNumber: true, min: 0 })}
-              type="number"
-              min={0}
-              step={1000}
-              style={inputStyle}
-              placeholder="0"
-            />
-          </div>
+          {type !== 'gold' && (
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Giá trị hiện tại (VND) *</label>
+              <input
+                {...register('currentValueDisplay', { valueAsNumber: true, min: 0 })}
+                type="number"
+                min={0}
+                step={1000}
+                style={inputStyle}
+                placeholder="0"
+              />
+            </div>
+          )}
 
           {type === 'bank' && (
             <div style={fieldStyle}>
@@ -312,7 +338,11 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
                 <div style={fieldStyle}>
                   <label style={labelStyle}>Số lượng</label>
                   <input
-                    {...register('goldQty', { valueAsNumber: true, min: 0 })}
+                    {...register('goldQty', {
+                      valueAsNumber: true,
+                      min: 0,
+                      setValueAs: (value) => (value === '' || value == null ? Number.NaN : Number(value)),
+                    })}
                     type="number"
                     min={0}
                     step={0.01}
@@ -321,14 +351,25 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
                 </div>
               </div>
               <div style={fieldStyle}>
-                <label style={labelStyle}>Giá mua (VND/đơn vị)</label>
+                <label style={labelStyle}>Giá 1 lượng vàng (từ cấu hình vàng)</label>
                 <input
-                  {...register('goldBuyPrice', { valueAsNumber: true, min: 0 })}
-                  type="number"
-                  min={0}
-                  step={1000}
-                  style={inputStyle}
+                  value={goldPricePerLuong ? formatCurrency(goldPricePerLuong) : 'Chưa cấu hình'}
+                  readOnly
+                  style={{ ...inputStyle, background: '#f8fafc', color: goldPricePerLuong ? '#0f172a' : '#dc2626' }}
                 />
+              </div>
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Giá trị hiện tại (tự tính)</label>
+                <input
+                  value={goldDerivedValue != null ? formatCurrency(goldDerivedValue) : 'Chưa thể tính'}
+                  readOnly
+                  style={{ ...inputStyle, background: '#f8fafc' }}
+                />
+                {goldFormStatusMessage && (
+                  <div style={{ marginTop: '6px', fontSize: '12px', color: '#dc2626' }}>
+                    {goldFormStatusMessage}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -488,17 +529,17 @@ export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: P
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || (type === 'gold' && goldFormStatusMessage !== null)}
               style={{
                 padding: '8px 20px',
                 background: '#4f46e5',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '8px',
-                cursor: isPending ? 'not-allowed' : 'pointer',
+                cursor: isPending || (type === 'gold' && goldFormStatusMessage !== null) ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
                 fontWeight: 600,
-                opacity: isPending ? 0.7 : 1,
+                opacity: isPending || (type === 'gold' && goldFormStatusMessage !== null) ? 0.7 : 1,
               }}
             >
               {isPending ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Thêm'}

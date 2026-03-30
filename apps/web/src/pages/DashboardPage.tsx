@@ -43,7 +43,7 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4">
-      <WalletBalanceCard totalBalance={dashboard.totalBalance} currency={currency} />
+      <WalletBalanceCard totalAssets={dashboard.totalAssets} currency={currency} />
 
       <MonthSummaryCards
         totalIncome={dashboard.totalIncome}

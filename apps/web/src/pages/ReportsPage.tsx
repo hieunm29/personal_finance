@@ -1,473 +1,624 @@
-import { useState, useMemo } from 'react'
-import { formatCurrency } from '../utils/format'
+import { useState, type ReactNode } from 'react'
+import type { DateFilterPreset, Transaction } from '@pf/shared'
+
 import {
-  useMonthlyOverview,
-  useExpensesByCategory,
-  useTransactionsByCategory,
-  useIncomeExpenseTrend,
-  useBudgetVsActual,
+  useAnnualSummary,
   useAssetAllocation,
+  useBudgetVsActual,
+  useExpensesByCategory,
+  useIncomeExpenseTrend,
+  useMonthlyOverview,
   useNetWorthHistory,
   useTopExpenses,
-  useAnnualSummary,
 } from '../hooks/useReports'
-import type { DateFilterPreset } from '@pf/shared'
+import { formatCurrency } from '../utils/format'
+import AnnualBarChart from '../components/reports/AnnualBarChart'
+import AssetAllocationChart from '../components/reports/AssetAllocationChart'
+import BudgetComparisonChart from '../components/reports/BudgetComparisonChart'
+import CategoryPieChart from '../components/reports/CategoryPieChart'
+import { CategoryDrilldownModal } from '../components/reports/CategoryDrilldownModal'
+import IncomeExpenseBarChart from '../components/reports/IncomeExpenseBarChart'
+import NetWorthTrendChart from '../components/reports/NetWorthTrendChart'
+import { PeriodFilter, computeDateRange } from '../components/reports/PeriodFilter'
+import { TopExpensesTable } from '../components/reports/TopExpensesTable'
+import TrendLineChart from '../components/reports/TrendLineChart'
 
-// Period filter presets
-const PERIOD_PRESETS: { value: DateFilterPreset; label: string }[] = [
-  { value: 'this_month', label: 'Tháng này' },
-  { value: 'this_quarter', label: 'Quý này' },
-  { value: 'this_year', label: 'Năm nay' },
-  { value: 'last_month', label: 'Tháng trước' },
-]
-
-// Compute date range from preset
-function getDateRangeFromPreset(preset: DateFilterPreset): { startDate: string; endDate: string } {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = today.getMonth()
-  const day = today.getDate()
-
-  const fmt = (d: Date) => d.toLocaleDateString('sv')
-
-  switch (preset) {
-    case 'this_month':
-      return { startDate: fmt(new Date(year, month, 1)), endDate: fmt(today) }
-    case 'this_quarter': {
-      const quarterStart = Math.floor(month / 3) * 3
-      return { startDate: fmt(new Date(year, quarterStart, 1)), endDate: fmt(today) }
-    }
-    case 'this_year':
-      return { startDate: fmt(new Date(year, 0, 1)), endDate: fmt(today) }
-    case 'last_month': {
-      const lastMonth = month === 0 ? 11 : month - 1
-      const lastMonthYear = month === 0 ? year - 1 : year
-      const daysInLastMonth = new Date(lastMonthYear, lastMonth + 1, 0).getDate()
-      return {
-        startDate: fmt(new Date(lastMonthYear, lastMonth, 1)),
-        endDate: fmt(new Date(lastMonthYear, lastMonth, daysInLastMonth)),
-      }
-    }
-    default:
-      return { startDate: fmt(new Date(year, month, 1)), endDate: fmt(today) }
-  }
-}
-
-// Tab definitions
 const TABS = [
   { id: 'overview', label: 'Tổng quan' },
   { id: 'categories', label: 'Theo danh mục' },
   { id: 'trend', label: 'Xu hướng' },
+  { id: 'budget', label: 'Ngân sách' },
+  { id: 'assets', label: 'Tài sản' },
   { id: 'annual', label: 'Báo cáo năm' },
-]
+] as const
 
-// Month selector for overview tab
-function MonthSelector({ year, month, onChange }: { year: number; month: number; onChange: (y: number, m: number) => void }) {
-  const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
-  const months = Array.from({ length: 12 }, (_, i) => i + 1)
+type TabId = (typeof TABS)[number]['id']
+type PeriodValue = { filter: DateFilterPreset | 'custom'; startDate: string; endDate: string }
+type MetricTone = 'income' | 'expense' | 'savings' | 'neutral'
+type AssetsPeriod = '6' | '12' | 'all'
+
+const TAB_CONTENT: Record<TabId, { eyebrow: string; description: string }> = {
+  overview: {
+    eyebrow: 'Executive Finance',
+    description: 'Tổng hợp thu, chi và mức tiết kiệm trong kỳ để theo dõi hiệu quả dòng tiền.',
+  },
+  categories: {
+    eyebrow: 'Category Mix',
+    description: 'So sánh cơ cấu chi tiêu theo danh mục để nhận diện nhóm đang chi phối ngân sách.',
+  },
+  trend: {
+    eyebrow: 'Trend Watch',
+    description: 'Theo dõi diễn biến thu chi qua thời gian và các giao dịch lớn cần chú ý.',
+  },
+  budget: {
+    eyebrow: 'Budget Control',
+    description: 'Đối chiếu ngân sách với chi tiêu thực tế để phát hiện mức vượt hoặc còn dư.',
+  },
+  assets: {
+    eyebrow: 'Wealth Snapshot',
+    description: 'Quan sát phân bổ tài sản và xu hướng tăng trưởng net worth trong một không gian thống nhất.',
+  },
+  annual: {
+    eyebrow: 'Year In Review',
+    description: 'Tổng kết toàn năm với chỉ số chính, xu hướng 12 tháng và bảng chênh lệch theo tháng.',
+  },
+}
+
+function getInitialPeriod(): PeriodValue {
+  return { filter: 'this_month', ...computeDateRange('this_month') }
+}
+
+function LoadingState() {
+  return (
+    <div className="report-card report-empty-state">
+      <div className="report-empty-state__label">Đang tải dữ liệu báo cáo...</div>
+    </div>
+  )
+}
+
+function ReportSectionHeader({
+  title,
+  description,
+  action,
+}: {
+  title: string
+  description: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="report-section-header">
+      <div>
+        <h2 className="report-section-header__title">{title}</h2>
+        <p className="report-section-header__description">{description}</p>
+      </div>
+      {action ? <div className="report-section-header__action">{action}</div> : null}
+    </div>
+  )
+}
+
+function ReportCard({
+  title,
+  subtitle,
+  action,
+  children,
+  className = '',
+}: {
+  title: string
+  subtitle?: string
+  action?: ReactNode
+  children: ReactNode
+  className?: string
+}) {
+  const classes = ['report-card', className].filter(Boolean).join(' ')
 
   return (
-    <div style={{ display: 'flex', gap: '8px' }}>
+    <section className={classes}>
+      <div className="report-card__header">
+        <div>
+          <h3 className="report-card__title">{title}</h3>
+          {subtitle ? <p className="report-card__subtitle">{subtitle}</p> : null}
+        </div>
+        {action ? <div className="report-card__action">{action}</div> : null}
+      </div>
+      <div className="report-card__body">{children}</div>
+    </section>
+  )
+}
+
+function MetricCard({
+  label,
+  value,
+  meta,
+  tone,
+}: {
+  label: string
+  value: string
+  meta: string
+  tone: MetricTone
+}) {
+  return (
+    <article className={`report-metric-card report-metric-card--${tone}`}>
+      <span className="report-metric-card__label">{label}</span>
+      <strong className="report-metric-card__value">{value}</strong>
+      <span className="report-metric-card__meta">{meta}</span>
+    </article>
+  )
+}
+
+function MonthYearSelector({
+  year,
+  month,
+  onChange,
+}: {
+  year: number
+  month: number
+  onChange: (yearValue: number, monthValue: number) => void
+}) {
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: 5 }, (_, index) => currentYear - index)
+  const months = Array.from({ length: 12 }, (_, index) => index + 1)
+
+  return (
+    <div className="report-inline-controls">
       <select
         value={month}
-        onChange={(e) => onChange(year, Number(e.target.value))}
-        style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px' }}
+        onChange={(event) => onChange(year, Number(event.target.value))}
+        className="report-select"
       >
-        {months.map((m) => (
-          <option key={m} value={m}>Tháng {m}</option>
+        {months.map((monthValue) => (
+          <option key={monthValue} value={monthValue}>
+            Tháng {monthValue}
+          </option>
         ))}
       </select>
       <select
         value={year}
-        onChange={(e) => onChange(Number(e.target.value), month)}
-        style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px' }}
+        onChange={(event) => onChange(Number(event.target.value), month)}
+        className="report-select"
       >
-        {years.map((y) => (
-          <option key={y} value={y}>{y}</option>
+        {years.map((yearValue) => (
+          <option key={yearValue} value={yearValue}>
+            {yearValue}
+          </option>
         ))}
       </select>
     </div>
   )
 }
 
-// Period Filter Component
-function PeriodFilter({ value, onChange }: { value: DateFilterPreset; onChange: (v: DateFilterPreset) => void }) {
-  return (
-    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-      {PERIOD_PRESETS.map((preset) => (
-        <button
-          key={preset.value}
-          onClick={() => onChange(preset.value)}
-          style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: value === preset.value ? '1px solid #4f46e5' : '1px solid #e2e8f0',
-            background: value === preset.value ? '#eef2ff' : '#fff',
-            color: value === preset.value ? '#4f46e5' : '#64748b',
-            fontSize: '13px',
-            fontWeight: value === preset.value ? 600 : 400,
-            cursor: 'pointer',
-          }}
-        >
-          {preset.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// Overview Tab
 function OverviewTab() {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
-
   const { data, isLoading } = useMonthlyOverview(year, month)
   const { overview, comparison } = data || {}
 
-  const savingsRate = overview && overview.totalIncome > 0
-    ? Math.round((overview.difference / overview.totalIncome) * 100)
-    : 0
+  const savingsRate =
+    overview && overview.totalIncome > 0
+      ? Math.round((overview.difference / overview.totalIncome) * 100)
+      : 0
 
-  if (isLoading) return <div style={{ padding: '20px', textAlign: 'center' }}>Đang tải...</div>
+  if (isLoading) {
+    return <LoadingState />
+  }
 
   return (
-    <div>
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Tổng quan tháng</h3>
-        <MonthSelector year={year} month={month} onChange={(y, m) => { setYear(y); setMonth(m) }} />
+    <div className="report-section">
+      <ReportSectionHeader
+        title="Hiệu suất dòng tiền"
+        description="Ba chỉ số quan trọng nhất được ưu tiên ở trên cùng để bạn đọc nhanh bức tranh tài chính tháng."
+        action={
+          <MonthYearSelector
+            year={year}
+            month={month}
+            onChange={(yearValue, monthValue) => {
+              setYear(yearValue)
+              setMonth(monthValue)
+            }}
+          />
+        }
+      />
+
+      <div className="report-metric-grid">
+        <MetricCard
+          label="Tổng thu"
+          value={formatCurrency(overview?.totalIncome || 0)}
+          meta={`${overview?.incomeCount || 0} giao dịch${
+            comparison?.incomeChangePercent !== null && comparison?.incomeChangePercent !== undefined
+              ? ` • ${comparison.incomeChangePercent >= 0 ? 'Tăng' : 'Giảm'} ${Math.abs(comparison.incomeChangePercent)}%`
+              : ''
+          }`}
+          tone="income"
+        />
+        <MetricCard
+          label="Tổng chi"
+          value={formatCurrency(overview?.totalExpense || 0)}
+          meta={`${overview?.expenseCount || 0} giao dịch${
+            comparison?.expenseChangePercent !== null && comparison?.expenseChangePercent !== undefined
+              ? ` • ${comparison.expenseChangePercent >= 0 ? 'Tăng' : 'Giảm'} ${Math.abs(comparison.expenseChangePercent)}%`
+              : ''
+          }`}
+          tone="expense"
+        />
+        <MetricCard
+          label="Tiết kiệm"
+          value={formatCurrency(overview?.difference || 0)}
+          meta={`${savingsRate}% tỷ lệ tiết kiệm trong kỳ đã chọn`}
+          tone="savings"
+        />
       </div>
 
-      {/* 3 Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        {/* Income Card */}
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>Tổng thu</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#16a34a', marginBottom: '4px' }}>
-            {formatCurrency(overview?.totalIncome || 0)}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748b' }}>
-            {overview?.incomeCount || 0} giao dịch
-            {comparison?.incomeChangePercent !== null && comparison?.incomeChangePercent !== undefined && (
-              <span style={{ marginLeft: '8px', color: comparison.incomeChangePercent >= 0 ? '#16a34a' : '#dc2626' }}>
-                {comparison.incomeChangePercent >= 0 ? '↑' : '↓'} {Math.abs(comparison.incomeChangePercent)}%
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Expense Card */}
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>Tổng chi</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#dc2626', marginBottom: '4px' }}>
-            {formatCurrency(overview?.totalExpense || 0)}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748b' }}>
-            {overview?.expenseCount || 0} giao dịch
-            {comparison?.expenseChangePercent !== null && comparison?.expenseChangePercent !== undefined && (
-              <span style={{ marginLeft: '8px', color: comparison.expenseChangePercent <= 0 ? '#16a34a' : '#dc2626' }}>
-                {comparison.expenseChangePercent >= 0 ? '↑' : '↓'} {Math.abs(comparison.expenseChangePercent)}%
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Savings Card */}
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>Tiết kiệm</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: overview?.difference && overview.difference >= 0 ? '#2563eb' : '#dc2626', marginBottom: '4px' }}>
-            {formatCurrency(overview?.difference || 0)}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748b' }}>
-            {savingsRate}% tỷ lệ
-          </div>
-        </div>
-      </div>
+      <ReportCard
+        title="Dòng tiền theo tháng"
+        subtitle={`So sánh tổng thu và tổng chi cho tháng ${month}/${year}.`}
+      >
+        {overview ? <IncomeExpenseBarChart data={overview} /> : null}
+      </ReportCard>
     </div>
   )
 }
 
-// Categories Tab
 function CategoriesTab() {
-  const [period, setPeriod] = useState<DateFilterPreset>('this_month')
-  const { startDate, endDate } = getDateRangeFromPreset(period)
-
+  const [period, setPeriod] = useState<PeriodValue>(getInitialPeriod)
+  const { startDate, endDate } = period
   const { data: categories, isLoading } = useExpensesByCategory(startDate, endDate)
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string } | null>(null)
 
-  const { data: transactions } = useTransactionsByCategory(
-    selectedCategory || '',
-    startDate,
-    endDate
-  )
-
-  if (isLoading) return <div style={{ padding: '20px', textAlign: 'center' }}>Đang tải...</div>
+  if (isLoading) {
+    return <LoadingState />
+  }
 
   return (
-    <div>
-      <div style={{ marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 600 }}>Chi tiêu theo danh mục</h3>
+    <div className="report-section">
+      <ReportSectionHeader
+        title="Chi tiêu theo danh mục"
+        description="Kết hợp donut chart và bảng chi tiết để đọc nhanh danh mục chi phối và drill-down khi cần."
+      />
+
+      <div className="report-toolbar">
         <PeriodFilter value={period} onChange={setPeriod} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        {/* Categories List */}
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ textAlign: 'left', padding: '8px', fontSize: '13px', color: '#64748b' }}>Danh mục</th>
-                <th style={{ textAlign: 'right', padding: '8px', fontSize: '13px', color: '#64748b' }}>Số tiền</th>
-                <th style={{ textAlign: 'right', padding: '8px', fontSize: '13px', color: '#64748b' }}>%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories?.map((cat) => (
-                <tr
-                  key={cat.categoryId}
-                  onClick={() => setSelectedCategory(cat.categoryId)}
-                  style={{ cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                >
-                  <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                    {cat.categoryIcon && <span style={{ marginRight: '8px' }}>{cat.categoryIcon}</span>}
-                    {cat.categoryName}
-                  </td>
-                  <td style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'right' }}>
-                    {formatCurrency(cat.totalAmount)}
-                  </td>
-                  <td style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'right', color: '#64748b' }}>
-                    {cat.percentage}%
-                  </td>
+      <div className="report-grid report-grid--wide">
+        <ReportCard
+          title="Cơ cấu chi tiêu"
+          subtitle="Tỷ trọng từng danh mục trong kỳ đã chọn."
+        >
+          <CategoryPieChart data={categories || []} />
+        </ReportCard>
+
+        <ReportCard
+          title="Danh mục nổi bật"
+          subtitle="Nhấn vào một hàng để xem giao dịch chi tiết của danh mục đó."
+        >
+          {categories && categories.length > 0 ? (
+            <table className="report-table report-table--interactive">
+              <thead>
+                <tr>
+                  <th>Danh mục</th>
+                  <th className="report-table__align-right">Số tiền</th>
+                  <th className="report-table__align-right">Tỷ trọng</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Category Details (Drill-down) */}
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-          {selectedCategory && transactions ? (
-            <>
-              <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-                Chi tiết: {categories?.find(c => c.categoryId === selectedCategory)?.categoryName}
-              </h4>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#64748b' }}>Ngày</th>
-                    <th style={{ textAlign: 'right', padding: '8px', fontSize: '12px', color: '#64748b' }}>Số tiền</th>
-                    <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#64748b' }}>Ghi chú</th>
+              </thead>
+              <tbody>
+                {categories.map((category) => (
+                  <tr
+                    key={category.categoryId}
+                    onClick={() =>
+                      setSelectedCategory({
+                        id: category.categoryId,
+                        name: category.categoryName,
+                      })
+                    }
+                  >
+                    <td>
+                      <div className="report-category-cell">
+                        <span
+                          className="report-category-cell__dot"
+                          style={{ backgroundColor: category.categoryColor || '#4f46e5' }}
+                        />
+                        <div className="report-category-cell__content">
+                          <span className="report-category-cell__name">
+                            {category.categoryIcon ? `${category.categoryIcon} ` : ''}
+                            {category.categoryName}
+                          </span>
+                          <span className="report-category-cell__hint">Nhấn để xem drill-down</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="report-table__align-right report-table__value">
+                      {formatCurrency(category.totalAmount)}
+                    </td>
+                    <td className="report-table__align-right">
+                      <span className="report-percentage-pill">{category.percentage.toFixed(1)}%</span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {(transactions as unknown[]).slice(0, 10).map((t: any) => (
-                    <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '8px', fontSize: '13px' }}>{t.date}</td>
-                      <td style={{ padding: '8px', fontSize: '13px', textAlign: 'right', color: '#dc2626' }}>
-                        {formatCurrency(t.amount)}
-                      </td>
-                      <td style={{ padding: '8px', fontSize: '13px', color: '#64748b' }}>{t.note || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
+                ))}
+              </tbody>
+            </table>
           ) : (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
-              Nhấp vào danh mục để xem chi tiết
+            <div className="report-empty-state report-empty-state--compact">
+              <div className="report-empty-state__label">Không có chi tiêu trong kỳ đã chọn.</div>
             </div>
           )}
-        </div>
+        </ReportCard>
       </div>
+
+      {selectedCategory ? (
+        <CategoryDrilldownModal
+          isOpen={true}
+          onClose={() => setSelectedCategory(null)}
+          categoryId={selectedCategory.id}
+          categoryName={selectedCategory.name}
+          startDate={startDate}
+          endDate={endDate}
+        />
+      ) : null}
     </div>
   )
 }
 
-// Trend Tab
 function TrendTab() {
-  const [period, setPeriod] = useState<DateFilterPreset>('this_month')
-  const { startDate, endDate } = getDateRangeFromPreset(period)
+  const [period, setPeriod] = useState<PeriodValue>(getInitialPeriod)
+  const { startDate, endDate } = period
+  const { data: trend, isLoading: isTrendLoading } = useIncomeExpenseTrend(undefined, startDate, endDate)
+  const { data: topExpenses, isLoading: isTopExpensesLoading } = useTopExpenses(startDate, endDate, 10)
 
-  const { data: trend, isLoading: trendLoading } = useIncomeExpenseTrend(undefined, startDate, endDate)
-  const { data: topExpenses, isLoading: topLoading } = useTopExpenses(startDate, endDate, 10)
-
-  if (trendLoading || topLoading) return <div style={{ padding: '20px', textAlign: 'center' }}>Đang tải...</div>
+  if (isTrendLoading || isTopExpensesLoading) {
+    return <LoadingState />
+  }
 
   return (
-    <div>
-      <div style={{ marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 600 }}>Xu hướng thu chi</h3>
+    <div className="report-section">
+      <ReportSectionHeader
+        title="Xu hướng thu chi"
+        description="Theo dõi chuyển động tổng thể và nhanh chóng phát hiện các giao dịch chi tiêu bất thường."
+      />
+
+      <div className="report-toolbar">
         <PeriodFilter value={period} onChange={setPeriod} />
       </div>
 
-      {/* Trend Chart Placeholder - would use Chart.js */}
-      <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
-        <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600 }}>Biểu đồ xu hướng</h4>
-        <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
-          {trend && trend.length > 0 ? (
-            <div style={{ width: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ padding: '8px', textAlign: 'left', fontSize: '12px', color: '#64748b' }}>Tháng</th>
-                    <th style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#16a34a' }}>Thu</th>
-                    <th style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#dc2626' }}>Chi</th>
-                    <th style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#64748b' }}>TB Chi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trend.map((t) => (
-                    <tr key={t.month} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '8px', fontSize: '13px' }}>{t.month}</td>
-                      <td style={{ padding: '8px', fontSize: '13px', textAlign: 'right', color: '#16a34a' }}>{formatCurrency(t.totalIncome)}</td>
-                      <td style={{ padding: '8px', fontSize: '13px', textAlign: 'right', color: '#dc2626' }}>{formatCurrency(t.totalExpense)}</td>
-                      <td style={{ padding: '8px', fontSize: '13px', textAlign: 'right', color: '#64748b' }}>{formatCurrency(t.averageExpense)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            'Chưa có dữ liệu'
-          )}
-        </div>
-      </div>
+      <div className="report-grid">
+        <ReportCard
+          title="Biểu đồ xu hướng"
+          subtitle="Thu, chi và mức chi trung bình trong giai đoạn đã chọn."
+        >
+          <TrendLineChart data={trend || []} />
+        </ReportCard>
 
-      {/* Top Expenses */}
-      <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
-        <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600 }}>Top 10 chi tiêu lớn nhất</h4>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ padding: '8px', textAlign: 'left', fontSize: '12px', color: '#64748b' }}>#</th>
-              <th style={{ padding: '8px', textAlign: 'left', fontSize: '12px', color: '#64748b' }}>Ngày</th>
-              <th style={{ padding: '8px', textAlign: 'left', fontSize: '12px', color: '#64748b' }}>Danh mục</th>
-              <th style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#64748b' }}>Số tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(topExpenses as unknown[])?.slice(0, 10).map((t: any, i: number) => (
-              <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '8px', fontSize: '13px', fontWeight: i < 3 ? 600 : 400 }}>{i + 1}</td>
-                <td style={{ padding: '8px', fontSize: '13px' }}>{t.date}</td>
-                <td style={{ padding: '8px', fontSize: '13px' }}>{t.category?.name || '-'}</td>
-                <td style={{ padding: '8px', fontSize: '13px', textAlign: 'right', color: '#dc2626' }}>{formatCurrency(t.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ReportCard
+          title="Top 10 chi tiêu lớn nhất"
+          subtitle="Danh sách giao dịch cần ưu tiên rà soát trong cùng kỳ."
+        >
+          <TopExpensesTable data={(topExpenses as Transaction[]) || []} />
+        </ReportCard>
       </div>
     </div>
   )
 }
 
-// Annual Tab
+function BudgetTab() {
+  const today = new Date()
+  const [year, setYear] = useState(today.getFullYear())
+  const [month, setMonth] = useState(today.getMonth() + 1)
+  const { data, isLoading } = useBudgetVsActual(year, month)
+
+  if (isLoading) {
+    return <LoadingState />
+  }
+
+  return (
+    <div className="report-section">
+      <ReportSectionHeader
+        title="Kiểm soát ngân sách"
+        description="Đặt khu vực chart vào một card duy nhất để việc so sánh kế hoạch và thực tế rõ ràng hơn."
+        action={
+          <MonthYearSelector
+            year={year}
+            month={month}
+            onChange={(yearValue, monthValue) => {
+              setYear(yearValue)
+              setMonth(monthValue)
+            }}
+          />
+        }
+      />
+
+      <ReportCard
+        title="Ngân sách vs thực tế"
+        subtitle={`So sánh theo từng danh mục trong tháng ${month}/${year}.`}
+      >
+        <BudgetComparisonChart data={data || []} />
+      </ReportCard>
+    </div>
+  )
+}
+
+function AssetsTab() {
+  const [assetsPeriod, setAssetsPeriod] = useState<AssetsPeriod>('12')
+  const { data: allocation, isLoading: isAllocationLoading } = useAssetAllocation()
+  const { data: netWorthHistory, isLoading: isHistoryLoading } = useNetWorthHistory()
+
+  const historyPoints = netWorthHistory
+    ? (assetsPeriod === '6'
+        ? (netWorthHistory as unknown[]).slice(-6)
+        : assetsPeriod === '12'
+          ? (netWorthHistory as unknown[]).slice(-12)
+          : netWorthHistory) as import('@pf/shared').NetWorthHistoryPoint[]
+    : []
+
+  if (isAllocationLoading || isHistoryLoading) {
+    return <LoadingState />
+  }
+
+  return (
+    <div className="report-section">
+      <ReportSectionHeader
+        title="Tài sản và net worth"
+        description="Kết hợp góc nhìn phân bổ tài sản với đà tăng trưởng tổng tài sản ròng."
+      />
+
+      <div className="report-grid">
+        <ReportCard
+          title="Phân bổ tài sản"
+          subtitle="Tỷ trọng từng nhóm tài sản trong danh mục hiện tại."
+        >
+          <AssetAllocationChart data={allocation || []} />
+        </ReportCard>
+
+        <ReportCard
+          title="Lịch sử net worth"
+          subtitle="Chọn khung thời gian để nhìn rõ mức tăng trưởng gần đây hoặc toàn bộ lịch sử."
+          action={
+            <div className="report-toggle-group" role="tablist" aria-label="Khung thời gian net worth">
+              {(['6', '12', 'all'] as AssetsPeriod[]).map((period) => (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setAssetsPeriod(period)}
+                  className={`report-toggle-button${assetsPeriod === period ? ' is-active' : ''}`}
+                >
+                  {period === '6' ? '6 tháng' : period === '12' ? '12 tháng' : 'Tất cả'}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <NetWorthTrendChart data={historyPoints} />
+        </ReportCard>
+      </div>
+    </div>
+  )
+}
+
 function AnnualTab() {
   const [year, setYear] = useState(new Date().getFullYear())
-
   const { data, isLoading } = useAnnualSummary(year)
+  const years = Array.from({ length: 4 }, (_, index) => new Date().getFullYear() - index)
 
-  if (isLoading) return <div style={{ padding: '20px', textAlign: 'center' }}>Đang tải...</div>
+  if (isLoading) {
+    return <LoadingState />
+  }
 
   return (
-    <div>
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Báo cáo năm</h3>
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px' }}
-        >
-          {[2024, 2025, 2026].map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+    <div className="report-section">
+      <ReportSectionHeader
+        title="Tổng kết năm"
+        description="Một bố cục rõ thứ tự ưu tiên: KPI trên cùng, xu hướng 12 tháng ở giữa, bảng đối chiếu phía dưới."
+        action={
+          <select
+            value={year}
+            onChange={(event) => setYear(Number(event.target.value))}
+            className="report-select"
+          >
+            {years.map((yearValue) => (
+              <option key={yearValue} value={yearValue}>
+                {yearValue}
+              </option>
+            ))}
+          </select>
+        }
+      />
+
+      <div className="report-metric-grid report-metric-grid--dense">
+        <MetricCard label="Tổng thu" value={formatCurrency(data?.totalIncome || 0)} meta={`Hiệu quả toàn năm ${year}`} tone="income" />
+        <MetricCard label="Tổng chi" value={formatCurrency(data?.totalExpense || 0)} meta="Tổng chi phát sinh trong năm" tone="expense" />
+        <MetricCard label="TB thu / tháng" value={formatCurrency(data?.averageIncome || 0)} meta="Mức thu trung bình theo tháng" tone="neutral" />
+        <MetricCard label="TB chi / tháng" value={formatCurrency(data?.averageExpense || 0)} meta="Mức chi trung bình theo tháng" tone="savings" />
       </div>
 
-      {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', color: '#64748b' }}>Tổng thu</div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#16a34a' }}>{formatCurrency(data?.totalIncome || 0)}</div>
-        </div>
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', color: '#64748b' }}>Tổng chi</div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(data?.totalExpense || 0)}</div>
-        </div>
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', color: '#64748b' }}>TB thu/tháng</div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#2563eb' }}>{formatCurrency(data?.averageIncome || 0)}</div>
-        </div>
-        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', color: '#64748b' }}>TB chi/tháng</div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#2563eb' }}>{formatCurrency(data?.averageExpense || 0)}</div>
-        </div>
-      </div>
+      <ReportCard
+        title="Biểu đồ thu chi 12 tháng"
+        subtitle="Đặt biểu đồ ở vị trí trung tâm để dễ nhìn nhịp tăng giảm của cả năm."
+      >
+        <AnnualBarChart data={data?.monthly || []} />
+      </ReportCard>
 
-      {/* Monthly Table */}
-      <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <ReportCard
+        title="Bảng chênh lệch theo tháng"
+        subtitle="Các tháng âm được tô nền nhẹ để dễ phát hiện hơn khi rà soát."
+      >
+        <table className="report-table">
           <thead>
-            <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <th style={{ padding: '8px', textAlign: 'left', fontSize: '12px', color: '#64748b' }}>Tháng</th>
-              <th style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#64748b' }}>Thu</th>
-              <th style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#64748b' }}>Chi</th>
-              <th style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#64748b' }}>Chênh lệch</th>
+            <tr>
+              <th>Tháng</th>
+              <th className="report-table__align-right">Thu</th>
+              <th className="report-table__align-right">Chi</th>
+              <th className="report-table__align-right">Chênh lệch</th>
             </tr>
           </thead>
           <tbody>
-            {data?.monthly.map((m) => (
-              <tr key={m.month} style={{ borderBottom: '1px solid #f1f5f9', background: m.difference < 0 ? '#fef2f2' : 'transparent' }}>
-                <td style={{ padding: '10px 8px', fontSize: '14px' }}>Tháng {parseInt(m.month.split('-')[1])}</td>
-                <td style={{ padding: '10px 8px', fontSize: '14px', textAlign: 'right', color: '#16a34a' }}>{formatCurrency(m.income)}</td>
-                <td style={{ padding: '10px 8px', fontSize: '14px', textAlign: 'right', color: '#dc2626' }}>{formatCurrency(m.expense)}</td>
-                <td style={{ padding: '10px 8px', fontSize: '14px', textAlign: 'right', color: m.difference >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
-                  {formatCurrency(m.difference)}
+            {data?.monthly.map((monthItem) => (
+              <tr key={monthItem.month} className={monthItem.difference < 0 ? 'report-table__row--negative' : ''}>
+                <td>Tháng {parseInt(monthItem.month.split('-')[1], 10)}</td>
+                <td className="report-table__align-right report-table__value report-table__value--income">
+                  {formatCurrency(monthItem.income)}
+                </td>
+                <td className="report-table__align-right report-table__value report-table__value--expense">
+                  {formatCurrency(monthItem.expense)}
+                </td>
+                <td
+                  className={`report-table__align-right report-table__value ${
+                    monthItem.difference >= 0 ? 'report-table__value--income' : 'report-table__value--expense'
+                  }`}
+                >
+                  {formatCurrency(monthItem.difference)}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </ReportCard>
     </div>
   )
 }
 
-// Main Reports Page
 export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   return (
-    <div>
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '8px 8px 0 0',
-              border: 'none',
-              background: activeTab === tab.id ? '#fff' : 'transparent',
-              color: activeTab === tab.id ? '#4f46e5' : '#64748b',
-              fontSize: '14px',
-              fontWeight: activeTab === tab.id ? 600 : 400,
-              cursor: 'pointer',
-              borderBottom: activeTab === tab.id ? '2px solid #4f46e5' : '2px solid transparent',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <div className="reports-shell">
+      <section className="reports-hero">
+        <div className="reports-hero__content">
+          <div className="reports-hero__copy">
+            <span className="reports-hero__eyebrow">Báo cáo tài chính</span>
+            <h1 className="reports-hero__title">Báo cáo</h1>
+            <p className="reports-hero__subtitle">
+              Theo dõi xu hướng chi tiêu, ngân sách và tài sản theo từng giai đoạn trong một workspace rõ ràng hơn.
+            </p>
+          </div>
 
-      {/* Tab Content */}
-      {activeTab === 'overview' && <OverviewTab />}
-      {activeTab === 'categories' && <CategoriesTab />}
-      {activeTab === 'trend' && <TrendTab />}
-      {activeTab === 'annual' && <AnnualTab />}
+          <div className="reports-hero__spotlight">
+            <span className="reports-hero__badge">{TAB_CONTENT[activeTab].eyebrow}</span>
+            <strong className="reports-hero__spotlight-title">
+              {TABS.find((tab) => tab.id === activeTab)?.label}
+            </strong>
+            <p className="reports-hero__spotlight-text">{TAB_CONTENT[activeTab].description}</p>
+          </div>
+        </div>
+
+        <div className="reports-tabs" role="tablist" aria-label="Các loại báo cáo">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-selected={activeTab === tab.id}
+              className={`reports-tab${activeTab === tab.id ? ' is-active' : ''}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {activeTab === 'overview' ? <OverviewTab /> : null}
+      {activeTab === 'categories' ? <CategoriesTab /> : null}
+      {activeTab === 'trend' ? <TrendTab /> : null}
+      {activeTab === 'budget' ? <BudgetTab /> : null}
+      {activeTab === 'assets' ? <AssetsTab /> : null}
+      {activeTab === 'annual' ? <AnnualTab /> : null}
     </div>
   )
 }

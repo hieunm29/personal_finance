@@ -168,23 +168,59 @@ export type CategoryBudgetItem = z.infer<typeof categoryBudgetItemSchema>
 // ═══════════════════════════════════════════════════════════
 // Asset schemas
 // ═══════════════════════════════════════════════════════════
-export const createAssetSchema = z.object({
+const assetBaseSchema = z.object({
   type: z.enum(['cash', 'bank', 'gold', 'stock', 'savings', 'real_estate', 'debt']),
   name: z.string().min(1).max(200),
-  currentValue: z.number().min(0),
+  currentValue: z.number().min(0).optional(),
   metadata: z.string().optional(),
   note: z.string().max(500).optional(),
 })
 
-export const updateAssetSchema = createAssetSchema.partial()
+export const createAssetSchema = assetBaseSchema.superRefine((data, ctx) => {
+  if (data.type === 'gold' && data.currentValue !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['currentValue'],
+      message: 'Tài sản vàng được định giá tự động từ đơn vị và số lượng',
+    })
+  }
+
+  if (data.type !== 'gold' && data.currentValue === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['currentValue'],
+      message: 'Vui lòng nhập giá trị hiện tại',
+    })
+  }
+})
+
+export const updateAssetSchema = assetBaseSchema.partial().superRefine((data, ctx) => {
+  if (data.type === 'gold' && data.currentValue !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['currentValue'],
+      message: 'Tài sản vàng được định giá tự động từ đơn vị và số lượng',
+    })
+  }
+})
 
 // ═══════════════════════════════════════════════════════════
 // Settings schemas
 // ═══════════════════════════════════════════════════════════
 export const updateProfileSchema = z.object({
-  displayName: z.string().min(1).max(100).optional(),
+  displayName: z.preprocess(
+    (value) => {
+      if (typeof value === 'string' && value.trim() === '') {
+        return undefined
+      }
+
+      return value
+    },
+    z.string().trim().min(1).max(100).optional(),
+  ),
   currency: z.string().length(3).optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
+  goldPricePerLuong: z.number().int().positive().optional(),
 })
 
 // ═══════════════════════════════════════════════════════════

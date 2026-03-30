@@ -16,6 +16,10 @@ import { apiClient } from '../services/apiClient'
 
 // ─── Profile Section ───────────────────────────────────────
 
+const profileFormSchema = updateProfileSchema.omit({ goldPricePerLuong: true })
+
+type ProfileFormValues = Omit<UpdateProfileInput, 'goldPricePerLuong'>
+
 function ProfileSection() {
   const queryClient = useQueryClient()
   const { data: session } = authClient.useSession()
@@ -30,8 +34,8 @@ function ProfileSection() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<UpdateProfileInput>({
-    resolver: zodResolver(updateProfileSchema),
+  } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
     values: {
       displayName: data?.data.displayName ?? '',
       currency: data?.data.currency as 'VND' | 'USD' | 'EUR' | undefined,
@@ -39,11 +43,26 @@ function ProfileSection() {
     },
   })
 
-  const onSubmit = async (formData: UpdateProfileInput) => {
+  const onSubmit = async (formData: ProfileFormValues) => {
     setSaveStatus('idle')
     try {
-      await apiClient('/settings/profile', { method: 'PUT', body: formData })
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile })
+      const normalizedDisplayName = formData.displayName?.trim()
+      const payload: UpdateProfileInput = {
+        currency: formData.currency,
+        theme: formData.theme,
+      }
+
+      if (normalizedDisplayName) {
+        payload.displayName = normalizedDisplayName
+      }
+
+      await apiClient('/settings/profile', { method: 'PUT', body: payload })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.assets }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reports }),
+      ])
       setSaveStatus('success')
       setTimeout(() => setSaveStatus('idle'), 3000)
     } catch {

@@ -1,0 +1,82 @@
+import './chartSetup'
+import { Doughnut } from 'react-chartjs-2'
+import type { AssetAllocationItem } from '@pf/shared'
+import { formatCurrency } from '../../utils/format'
+
+const TYPE_COLORS: Record<string, string> = {
+  cash: '#22c55e',
+  bank: '#3b82f6',
+  gold: '#eab308',
+  stock: '#8b5cf6',
+  savings: '#06b6d4',
+  real_estate: '#f97316',
+}
+
+interface Props {
+  data: AssetAllocationItem[]
+}
+
+export default function AssetAllocationChart({ data }: Props) {
+  const filtered = data.filter((item) => item.totalValue > 0 && item.type !== 'debt')
+
+  if (filtered.length === 0) {
+    return (
+      <div
+        style={{
+          height: '260px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#94a3b8',
+          fontSize: '14px',
+        }}
+      >
+        Chưa có dữ liệu tài sản
+      </div>
+    )
+  }
+
+  const chartData = {
+    labels: filtered.map((item) => `${item.label} (${item.percentage.toFixed(1)}%)`),
+    datasets: [
+      {
+        data: filtered.map((item) => item.totalValue),
+        backgroundColor: filtered.map((item) => TYPE_COLORS[item.type] ?? '#94a3b8'),
+        borderWidth: 2,
+        borderColor: '#fff',
+      },
+    ],
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          font: { size: 11 },
+          padding: 12,
+          boxWidth: 12,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx: { label: string; raw: unknown; dataset: { data: unknown[] }; dataIndex: number }) => {
+            const value = ctx.raw as number
+            const total = (ctx.dataset.data as number[]).reduce((a, b) => a + b, 0)
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
+            const item = filtered[ctx.dataIndex]
+            return `${item.label}: ${formatCurrency(value)} (${percentage}%)`
+          },
+        },
+      },
+    },
+  }
+
+  return (
+    <div style={{ height: '260px' }}>
+      <Doughnut data={chartData} options={options} />
+    </div>
+  )
+}

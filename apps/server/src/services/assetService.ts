@@ -3,6 +3,13 @@ import { db } from '../db'
 import { assets, assetHistory, userProfiles } from '../db/schema'
 import type { CreateAssetInput, UpdateAssetInput } from '@pf/shared'
 import type { Asset, NetWorthData, NetWorthHistoryPoint, AssetAllocationItem } from '@pf/shared'
+import {
+  assertGoldManualValueUpdateAllowed,
+  buildGoldRevaluationUpdates,
+  calculateGoldAssetValue,
+  parseGoldMetadata,
+  serializeGoldMetadata,
+} from './goldValuation'
 
 const TYPE_LABELS: Record<string, string> = {
   cash: 'Tiền mặt',
@@ -20,6 +27,29 @@ function getProfileId(authUserId: string): string {
   return p.id
 }
 
+function getProfileSettings(authUserId: string) {
+  const profile = db
+    .select({
+      id: userProfiles.id,
+      goldPricePerLuong: userProfiles.goldPricePerLuong,
+    })
+    .from(userProfiles)
+    .where(eq(userProfiles.authUserId, authUserId))
+    .get()
+
+  if (!profile) throw Object.assign(new Error('Profile not found'), { status: 404 })
+
+  return profile
+}
+
+function asBadRequest(error: unknown): never {
+  if (error instanceof Error) {
+    throw Object.assign(new Error(error.message), { status: 400 })
+  }
+
+  throw Object.assign(new Error('Yêu cầu không hợp lệ'), { status: 400 })
+}
+
 export function getAssets(authUserId: string, type?: string): Asset[] {
   const profileId = getProfileId(authUserId)
   const condition = type
@@ -30,33 +60,65 @@ export function getAssets(authUserId: string, type?: string): Asset[] {
 }
 
 export function createAsset(authUserId: string, data: CreateAssetInput): Asset {
-  const profileId = getProfileId(authUserId)
+  const profile = getProfileSettings(authUserId)
+  let currentValue = data.currentValue ?? 0
+  let metadata = data.metadata ?? null
+
+  if (data.type === 'gold') {
+    try {
+      if (data.currentValue !== undefined) {
+        throw new Error('Tài sản vàng được định giá tự động từ đơn vị và số lượng')
+      }
+      const goldMetadata = parseGoldMetadata(data.metadata)
+      currentValue = calculateGoldAssetValue(goldMetadata, profile.goldPricePerLuong)
+      metadata = serializeGoldMetadata(goldMetadata)
+    } catch (error) {
+      asBadRequest(error)
+    }
+  }
+
   const id = crypto.randomUUID()
   db.insert(assets).values({
     id,
-    userId: profileId,
+    userId: profile.id,
     type: data.type,
     name: data.name,
-    currentValue: data.currentValue,
-    metadata: data.metadata ?? null,
+    currentValue,
+    metadata,
     note: data.note ?? null,
   }).run()
   return db.select().from(assets).where(eq(assets.id, id)).get()! as unknown as Asset
 }
 
 export function updateAsset(authUserId: string, assetId: string, data: UpdateAssetInput): Asset {
-  const profileId = getProfileId(authUserId)
+  const profile = getProfileSettings(authUserId)
   const asset = db.select().from(assets).where(eq(assets.id, assetId)).get()
-  if (!asset || asset.userId !== profileId) {
+  if (!asset || asset.userId !== profile.id) {
     throw Object.assign(new Error('Asset not found'), { status: 404 })
   }
 
   const setFields: Record<string, unknown> = { updatedAt: sql`(datetime('now'))` }
+  const nextType = data.type ?? asset.type
+
   if (data.type !== undefined) setFields.type = data.type
   if (data.name !== undefined) setFields.name = data.name
-  if (data.currentValue !== undefined) setFields.currentValue = data.currentValue
-  if (data.metadata !== undefined) setFields.metadata = data.metadata
   if (data.note !== undefined) setFields.note = data.note
+
+  if (nextType === 'gold') {
+    try {
+      if (data.currentValue !== undefined) {
+        throw new Error('Tài sản vàng được định giá tự động từ đơn vị và số lượng')
+      }
+      const goldMetadata = parseGoldMetadata(data.metadata ?? asset.metadata)
+      setFields.metadata = serializeGoldMetadata(goldMetadata)
+      setFields.currentValue = calculateGoldAssetValue(goldMetadata, profile.goldPricePerLuong)
+    } catch (error) {
+      asBadRequest(error)
+    }
+  } else {
+    if (data.currentValue !== undefined) setFields.currentValue = data.currentValue
+    if (data.metadata !== undefined) setFields.metadata = data.metadata
+  }
 
   db.update(assets).set(setFields).where(eq(assets.id, assetId)).run()
   return db.select().from(assets).where(eq(assets.id, assetId)).get()! as unknown as Asset
@@ -112,6 +174,12 @@ export function updateAssetValue(authUserId: string, assetId: string, newValue: 
     throw Object.assign(new Error('Asset not found'), { status: 404 })
   }
 
+  try {
+    assertGoldManualValueUpdateAllowed(asset.type)
+  } catch (error) {
+    asBadRequest(error)
+  }
+
   db.update(assets).set({ currentValue: newValue, updatedAt: sql`(datetime('now'))` }).where(eq(assets.id, assetId)).run()
 
   db.insert(assetHistory).values({
@@ -122,6 +190,42 @@ export function updateAssetValue(authUserId: string, assetId: string, newValue: 
   }).run()
 
   return db.select().from(assets).where(eq(assets.id, assetId)).get()! as unknown as Asset
+}
+
+export function revalueGoldAssetsForProfile(profileId: string, goldPricePerLuong: number): void {
+  const goldAssets = db
+    .select({
+      id: assets.id,
+      metadata: assets.metadata,
+    })
+    .from(assets)
+    .where(sql`${assets.userId} = ${profileId} AND ${assets.type} = 'gold'`)
+    .all()
+
+  if (goldAssets.length === 0) return
+
+  const updates = buildGoldRevaluationUpdates(goldAssets, goldPricePerLuong)
+  const today = new Date().toLocaleDateString('sv')
+
+  for (const update of updates) {
+    db.update(assets)
+      .set({
+        currentValue: update.currentValue,
+        metadata: update.metadata,
+        updatedAt: sql`(datetime('now'))`,
+      })
+      .where(eq(assets.id, update.id))
+      .run()
+
+    db.insert(assetHistory)
+      .values({
+        id: crypto.randomUUID(),
+        assetId: update.id,
+        value: update.currentValue,
+        date: today,
+      })
+      .run()
+  }
 }
 
 export function getNetWorthHistory(authUserId: string, limit?: number): NetWorthHistoryPoint[] {

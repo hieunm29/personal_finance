@@ -1,5 +1,6 @@
 import type { Asset } from '@pf/shared'
 import { formatCurrency, formatDate } from '../../utils/format'
+import { formatGoldQuantityLabel, getGoldPriceStatusMessage, parseGoldMetadata } from '../../utils/gold'
 
 const ICONS: Record<string, string> = {
   cash: '💵',
@@ -13,12 +14,13 @@ const ICONS: Record<string, string> = {
 
 interface Props {
   assets: Asset[]
+  goldPricePerLuong: number | null
   onEdit: (asset: Asset) => void
   onDelete: (asset: Asset) => void
   onUpdateValue: (asset: Asset) => void
 }
 
-function getSubText(asset: Asset): string {
+function getSubText(asset: Asset, goldPricePerLuong: number | null): string {
   const meta = asset.metadata ? (JSON.parse(asset.metadata) as Record<string, unknown>) : null
   switch (asset.type) {
     case 'cash':
@@ -26,10 +28,15 @@ function getSubText(asset: Asset): string {
     case 'bank':
       return (meta?.bankName as string) ?? 'Ngân hàng'
     case 'gold': {
-      const qty = (meta?.quantity as number) ?? 0
-      const unit = (meta?.unit as string) === 'chi' ? 'Chỉ' : 'Lượng'
-      const buyPrice = (meta?.buyPrice as number) ?? 0
-      return `${qty} ${unit} | Giá mua: ${formatCurrency(buyPrice)}`
+      const goldMeta = parseGoldMetadata(asset.metadata)
+      const quantityLabel = goldMeta ? formatGoldQuantityLabel(goldMeta.unit, goldMeta.quantity) : 'Vàng'
+      const priceStatus = getGoldPriceStatusMessage(goldPricePerLuong)
+
+      if (priceStatus) {
+        return `${quantityLabel} | ${priceStatus}`
+      }
+
+      return `${quantityLabel} | Giá cấu hình: ${formatCurrency(goldPricePerLuong ?? 0)}/lượng`
     }
     case 'stock': {
       const ticker = (meta?.ticker as string) ?? ''
@@ -66,18 +73,7 @@ function PnLDisplay({ asset }: { asset: Asset }) {
   const meta = asset.metadata ? (JSON.parse(asset.metadata) as Record<string, unknown>) : null
 
   if (asset.type === 'gold') {
-    const qty = (meta?.quantity as number) ?? 0
-    const buyPrice = (meta?.buyPrice as number) ?? 0
-    const costBasis = qty * buyPrice
-    const pnl = asset.currentValue - costBasis
-    if (!costBasis) return null
-    const color = pnl >= 0 ? '#16a34a' : '#dc2626'
-    const sign = pnl >= 0 ? '+' : ''
-    return (
-      <div style={{ fontSize: '12px', color, marginTop: '2px' }}>
-        {sign}{formatCurrency(pnl)}
-      </div>
-    )
+    return null
   }
 
   if (asset.type === 'stock') {
@@ -170,7 +166,7 @@ const btnStyle: React.CSSProperties = {
   lineHeight: 1,
 }
 
-export default function AssetList({ assets, onEdit, onDelete, onUpdateValue }: Props) {
+export default function AssetList({ assets, goldPricePerLuong, onEdit, onDelete, onUpdateValue }: Props) {
   if (assets.length === 0) {
     return (
       <div
@@ -231,7 +227,7 @@ export default function AssetList({ assets, onEdit, onDelete, onUpdateValue }: P
                 className="asset-sub"
                 style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}
               >
-                {getSubText(asset)}
+                {getSubText(asset, goldPricePerLuong)}
               </div>
               <PnLDisplay asset={asset} />
               {showUpdatedAt && (
@@ -255,9 +251,11 @@ export default function AssetList({ assets, onEdit, onDelete, onUpdateValue }: P
                 <button onClick={() => onEdit(asset)} style={btnStyle} title="Sửa">
                   ✏️
                 </button>
-                <button onClick={() => onUpdateValue(asset)} style={btnStyle} title="Cập nhật giá">
-                  🔄
-                </button>
+                {asset.type !== 'gold' && (
+                  <button onClick={() => onUpdateValue(asset)} style={btnStyle} title="Cập nhật giá">
+                    🔄
+                  </button>
+                )}
                 <button onClick={() => onDelete(asset)} style={btnStyle} title="Xóa">
                   🗑️
                 </button>
