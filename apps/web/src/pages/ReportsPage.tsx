@@ -1,99 +1,115 @@
-import { useState, type ReactNode } from 'react'
-import type { DateFilterPreset, Transaction } from '@pf/shared'
-
+import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import type { MonthlyOverview, ReportInsight, ReportPeriodOverview, ReportTabId } from '@pf/shared'
 import {
   useAnnualSummary,
   useAssetAllocation,
   useBudgetVsActual,
   useExpensesByCategory,
+  useExportReport,
   useIncomeExpenseTrend,
-  useMonthlyOverview,
   useNetWorthHistory,
+  useReportInsights,
+  useReportOverview,
   useTopExpenses,
 } from '../hooks/useReports'
-import { formatCurrency } from '../utils/format'
+import { formatCurrency, formatDate } from '../utils/format'
 import AnnualBarChart from '../components/reports/AnnualBarChart'
 import AssetAllocationChart from '../components/reports/AssetAllocationChart'
 import BudgetComparisonChart from '../components/reports/BudgetComparisonChart'
+import CashflowTrendChart from '../components/reports/CashflowTrendChart'
 import CategoryPieChart from '../components/reports/CategoryPieChart'
 import { CategoryDrilldownModal } from '../components/reports/CategoryDrilldownModal'
-import IncomeExpenseBarChart from '../components/reports/IncomeExpenseBarChart'
 import NetWorthTrendChart from '../components/reports/NetWorthTrendChart'
-import { PeriodFilter, computeDateRange } from '../components/reports/PeriodFilter'
 import { TopExpensesTable } from '../components/reports/TopExpensesTable'
 import TrendLineChart from '../components/reports/TrendLineChart'
+import './reports.css'
+
+type ReportPeriod = {
+  preset: 'this_month' | 'last_month' | 'last_3_months' | 'last_6_months' | 'this_year' | 'custom'
+  startDate: string
+  endDate: string
+}
+
+type AssetHistoryPeriod = '6' | '12' | 'all'
+type MetricTone = 'income' | 'expense' | 'savings' | 'rate' | 'neutral'
 
 const TABS = [
-  { id: 'overview', label: 'Tổng quan' },
-  { id: 'categories', label: 'Theo danh mục' },
-  { id: 'trend', label: 'Xu hướng' },
-  { id: 'budget', label: 'Ngân sách' },
-  { id: 'assets', label: 'Tài sản' },
-  { id: 'annual', label: 'Báo cáo năm' },
-] as const
+  { id: 'overview', label: 'Tổng quan', icon: 'M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h6v6h-6z' },
+  { id: 'categories', label: 'Theo danh mục', icon: 'M11 3a9 9 0 1 0 10 10H11zM14 3v7h7a9 9 0 0 0-7-7Z' },
+  { id: 'trend', label: 'Xu hướng', icon: 'm3 17 6-6 4 4 7-7m-6 0h6v6' },
+  { id: 'budget', label: 'Ngân sách', icon: 'M22 12a10 10 0 1 0-20 0 10 10 0 0 0 20 0Zm-4 0a6 6 0 1 0-12 0 6 6 0 0 0 12 0Zm-4 0a2 2 0 1 0-4 0 2 2 0 0 0 4 0Z' },
+  { id: 'assets', label: 'Tài sản', icon: 'M20 8V5H5a2 2 0 0 0 0 4h16v11H5a2 2 0 0 1-2-2V7m18 5h-5a2 2 0 0 0 0 4h5' },
+  { id: 'annual', label: 'Báo cáo năm', icon: 'M4 6h16v15H4zM4 10h16M8 3v6m8-6v6' },
+] as const satisfies ReadonlyArray<{ id: ReportTabId; label: string; icon: string }>
 
-type TabId = (typeof TABS)[number]['id']
-type PeriodValue = { filter: DateFilterPreset | 'custom'; startDate: string; endDate: string }
-type MetricTone = 'income' | 'expense' | 'savings' | 'neutral'
-type AssetsPeriod = '6' | '12' | 'all'
+const PRESETS = [
+  { id: 'this_month', label: 'Tháng này' },
+  { id: 'last_month', label: 'Tháng trước' },
+  { id: 'last_3_months', label: '3 tháng' },
+  { id: 'last_6_months', label: '6 tháng' },
+  { id: 'this_year', label: 'Năm nay' },
+  { id: 'custom', label: 'Tùy chọn' },
+] as const satisfies ReadonlyArray<{ id: ReportPeriod['preset']; label: string }>
 
-const TAB_CONTENT: Record<TabId, { eyebrow: string; description: string }> = {
-  overview: {
-    eyebrow: 'Executive Finance',
-    description: 'Tổng hợp thu, chi và mức tiết kiệm trong kỳ để theo dõi hiệu quả dòng tiền.',
-  },
-  categories: {
-    eyebrow: 'Category Mix',
-    description: 'So sánh cơ cấu chi tiêu theo danh mục để nhận diện nhóm đang chi phối ngân sách.',
-  },
-  trend: {
-    eyebrow: 'Trend Watch',
-    description: 'Theo dõi diễn biến thu chi qua thời gian và các giao dịch lớn cần chú ý.',
-  },
-  budget: {
-    eyebrow: 'Budget Control',
-    description: 'Đối chiếu ngân sách với chi tiêu thực tế để phát hiện mức vượt hoặc còn dư.',
-  },
-  assets: {
-    eyebrow: 'Wealth Snapshot',
-    description: 'Quan sát phân bổ tài sản và xu hướng tăng trưởng net worth trong một không gian thống nhất.',
-  },
-  annual: {
-    eyebrow: 'Year In Review',
-    description: 'Tổng kết toàn năm với chỉ số chính, xu hướng 12 tháng và bảng chênh lệch theo tháng.',
-  },
-}
+const CALENDAR_ICON = TABS[5].icon
+const MAX_TREND_MONTHS = 12
 
-function getInitialPeriod(): PeriodValue {
-  return { filter: 'this_month', ...computeDateRange('this_month') }
-}
-
-function LoadingState() {
+function ReportIcon({ path }: { path: string }) {
   return (
-    <div className="report-card report-empty-state">
-      <div className="report-empty-state__label">Đang tải dữ liệu báo cáo...</div>
-    </div>
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+      <path d={path} />
+    </svg>
   )
 }
 
-function ReportSectionHeader({
-  title,
-  description,
-  action,
-}: {
-  title: string
-  description: string
-  action?: ReactNode
-}) {
-  return (
-    <div className="report-section-header">
-      <div>
-        <h2 className="report-section-header__title">{title}</h2>
-        <p className="report-section-header__description">{description}</p>
-      </div>
-      {action ? <div className="report-section-header__action">{action}</div> : null}
-    </div>
-  )
+function localToday() {
+  return new Date().toLocaleDateString('sv')
+}
+
+function shiftMonthStart(date: string, offset: number): string | null {
+  const month = new Date(`${date.slice(0, 7)}-01T00:00:00Z`)
+  month.setUTCMonth(month.getUTCMonth() + offset)
+  if (month.getUTCFullYear() < 1 || month.getUTCFullYear() > 9999) return null
+  return month.toISOString().slice(0, 10)
+}
+
+function getMonthEnd(monthStart: string) {
+  const month = new Date(`${monthStart}T00:00:00Z`)
+  month.setUTCMonth(month.getUTCMonth() + 1, 0)
+  return month.toISOString().slice(0, 10)
+}
+
+function getPresetPeriod(preset: Exclude<ReportPeriod['preset'], 'custom'>, today = localToday()): ReportPeriod {
+  const monthStart = `${today.slice(0, 7)}-01`
+  switch (preset) {
+    case 'last_month': {
+      const startDate = shiftMonthStart(today, -1) ?? '0001-01-01'
+      return { preset, startDate, endDate: getMonthEnd(startDate) }
+    }
+    case 'last_3_months':
+    case 'last_6_months': {
+      const offset = preset === 'last_3_months' ? -2 : -5
+      return { preset, startDate: shiftMonthStart(today, offset) ?? '0001-01-01', endDate: today }
+    }
+    case 'this_year':
+      return { preset, startDate: `${today.slice(0, 4)}-01-01`, endDate: today }
+    default:
+      return { preset, startDate: monthStart, endDate: today }
+  }
+}
+
+function getNavigatedPeriod(startDate: string, today: string): ReportPeriod {
+  const currentMonth = getPresetPeriod('this_month', today)
+  const lastMonth = getPresetPeriod('last_month', today)
+  if (startDate === currentMonth.startDate) return currentMonth
+  if (startDate === lastMonth.startDate) return lastMonth
+
+  return { preset: 'custom', startDate, endDate: getMonthEnd(startDate) }
+}
+
+function ReportStatus({ message, error = false }: { message: string; error?: boolean }) {
+  return <p className="reports-status" role={error ? 'alert' : 'status'}>{message}</p>
 }
 
 function ReportCard({
@@ -101,21 +117,17 @@ function ReportCard({
   subtitle,
   action,
   children,
-  className = '',
 }: {
   title: string
   subtitle?: string
   action?: ReactNode
   children: ReactNode
-  className?: string
 }) {
-  const classes = ['report-card', className].filter(Boolean).join(' ')
-
   return (
-    <section className={classes}>
+    <section className="report-card">
       <div className="report-card__header">
         <div>
-          <h3 className="report-card__title">{title}</h3>
+          <h2 className="report-card__title">{title}</h2>
           {subtitle ? <p className="report-card__subtitle">{subtitle}</p> : null}
         </div>
         {action ? <div className="report-card__action">{action}</div> : null}
@@ -125,160 +137,205 @@ function ReportCard({
   )
 }
 
+const METRIC_ICONS: Record<MetricTone, string> = {
+  income: 'M12 4v15m-6-6 6 6 6-6',
+  expense: 'M12 20V5m-6 6 6-6 6 6',
+  savings: 'M3 10h3l2-4h9l3 4h2v6h-3l-1 3h-3v-2h-4v2H8l-1-3H4v-4zm12 1h.01',
+  rate: 'M12 4v15m-5 1h10M4 7h16M6 7l-3 7h6Zm12 0-3 7h6Z',
+  neutral: CALENDAR_ICON,
+}
+
 function MetricCard({
   label,
   value,
   meta,
+  change,
   tone,
 }: {
   label: string
   value: string
-  meta: string
+  meta?: string
+  change?: number | null
   tone: MetricTone
 }) {
+  const direction = change == null ? null : tone === 'expense' ? -change : change
+  const sentiment = direction === null || direction === 0 ? 'neutral' : direction > 0 ? 'positive' : 'negative'
+
   return (
     <article className={`report-metric-card report-metric-card--${tone}`}>
-      <span className="report-metric-card__label">{label}</span>
+      <span className="report-metric-card__label">
+        <span className="reports-stat-icon"><ReportIcon path={METRIC_ICONS[tone]} /></span>
+        {label}
+      </span>
       <strong className="report-metric-card__value">{value}</strong>
-      <span className="report-metric-card__meta">{meta}</span>
+      {meta || change != null ? (
+        <div className="report-metric-card__meta">
+          {change != null ? (
+            <span
+              className={`reports-change reports-change--${sentiment}`}
+              aria-label={`${signedNumberFormat.format(change)}${tone === 'rate' ? ' điểm phần trăm' : '%'} so với kỳ trước`}
+              title="So với kỳ trước"
+            >
+              {signedNumberFormat.format(change)}{tone === 'rate' ? ' điểm' : '%'}
+            </span>
+          ) : null}
+          {meta ? <span>{meta}</span> : null}
+        </div>
+      ) : null}
     </article>
   )
 }
 
-function MonthYearSelector({
-  year,
-  month,
-  onChange,
-}: {
-  year: number
-  month: number
-  onChange: (yearValue: number, monthValue: number) => void
-}) {
-  const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 5 }, (_, index) => currentYear - index)
-  const months = Array.from({ length: 12 }, (_, index) => index + 1)
+function getSavingsRate(overview: MonthlyOverview) {
+  return overview.totalIncome > 0 ? (overview.difference / overview.totalIncome) * 100 : null
+}
+
+function getMonthCount(startDate: string, endDate: string) {
+  const [startYear, startMonth] = startDate.split('-').map(Number)
+  const [endYear, endMonth] = endDate.split('-').map(Number)
+  return (endYear - startYear) * 12 + endMonth - startMonth + 1
+}
+
+const numberFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 })
+const signedNumberFormat = new Intl.NumberFormat('vi-VN', {
+  maximumFractionDigits: 1,
+  signDisplay: 'exceptZero',
+})
+
+function OverviewMetrics({ data }: { data: ReportPeriodOverview }) {
+  const { current, previous, changes } = data
+  if (current.transactionCount === 0) {
+    return <ReportStatus message="Chưa có giao dịch trong kỳ này." />
+  }
+
+  const savingsRate = getSavingsRate(current)
+  const previousRate = previous ? getSavingsRate(previous.overview) : null
+  const previousLabel = previous?.overview.transactionCount ? 'so với kỳ trước' : undefined
 
   return (
-    <div className="report-inline-controls">
-      <select
-        value={month}
-        onChange={(event) => onChange(year, Number(event.target.value))}
-        className="report-select"
-      >
-        {months.map((monthValue) => (
-          <option key={monthValue} value={monthValue}>
-            Tháng {monthValue}
-          </option>
-        ))}
-      </select>
-      <select
-        value={year}
-        onChange={(event) => onChange(Number(event.target.value), month)}
-        className="report-select"
-      >
-        {years.map((yearValue) => (
-          <option key={yearValue} value={yearValue}>
-            {yearValue}
-          </option>
-        ))}
-      </select>
+    <div className="report-metric-grid report-metric-grid--dense">
+      <MetricCard
+        label="Tổng thu"
+        value={formatCurrency(current.totalIncome)}
+        meta={`${changes.incomePercent === null ? '' : 'so với kỳ trước · '}${current.incomeCount} giao dịch`}
+        change={changes.incomePercent}
+        tone="income"
+      />
+      <MetricCard
+        label="Tổng chi"
+        value={formatCurrency(current.totalExpense)}
+        meta={`${changes.expensePercent === null ? '' : 'so với kỳ trước · '}${current.expenseCount} giao dịch`}
+        change={changes.expensePercent}
+        tone="expense"
+      />
+      <MetricCard
+        label="Tiết kiệm"
+        value={formatCurrency(current.difference)}
+        meta={previousLabel && previous ? `${previousLabel}: ${formatCurrency(previous.overview.difference)}` : undefined}
+        change={changes.savingsPercent}
+        tone="savings"
+      />
+      <MetricCard
+        label="Tỷ lệ tiết kiệm"
+        value={savingsRate === null ? '—' : `${numberFormat.format(savingsRate)}%`}
+        meta={savingsRate === null
+          ? 'Chưa có thu nhập trong kỳ'
+          : previousRate !== null ? `so với kỳ trước: ${numberFormat.format(previousRate)}%` : undefined}
+        change={savingsRate !== null && previousRate !== null ? savingsRate - previousRate : null}
+        tone="rate"
+      />
     </div>
   )
 }
 
-function OverviewTab() {
-  const today = new Date()
-  const [year, setYear] = useState(today.getFullYear())
-  const [month, setMonth] = useState(today.getMonth() + 1)
-  const { data, isLoading } = useMonthlyOverview(year, month)
-  const { overview, comparison } = data || {}
+const INSIGHT_TONES = {
+  savings: { icon: '✓', tone: 'income' },
+  budget: { icon: '!', tone: 'expense' },
+  top_expense: { icon: '≡', tone: 'savings' },
+} as const
 
-  const savingsRate =
-    overview && overview.totalIncome > 0
-      ? Math.round((overview.difference / overview.totalIncome) * 100)
-      : 0
+function InsightCards({ insights }: { insights: ReportInsight[] }) {
+  return (
+    <ul className="reports-insights">
+      {insights.map((insight) => {
+        const { icon, tone } = INSIGHT_TONES[insight.kind]
+        const details = [
+          insight.amount !== undefined ? formatCurrency(insight.amount) : null,
+          insight.percentage !== undefined ? `${numberFormat.format(insight.percentage)}%` : null,
+          insight.date ? formatDate(insight.date) : null,
+        ].filter(Boolean)
 
-  if (isLoading) {
-    return <LoadingState />
-  }
+        return (
+          <li className={`reports-insight report-metric-card--${tone}`} key={insight.kind}>
+            <span className="reports-stat-icon" aria-hidden="true">{icon}</span>
+            <div>
+              <h3>{insight.title}</h3>
+              <p>{insight.description}</p>
+              {details.length > 0 ? <p className="reports-insight-details">{details.join(' · ')}</p> : null}
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function OverviewTab({ period, onViewCategories }: { period: ReportPeriod; onViewCategories: () => void }) {
+  const { startDate, endDate } = period
+  const historyStart = shiftMonthStart(endDate, -5) ?? '0001-01-01'
+  const overview = useReportOverview(startDate, endDate)
+  const trend = useIncomeExpenseTrend(undefined, historyStart, endDate)
+  const insights = useReportInsights(startDate, endDate)
+  const hasTrendActivity = trend.data?.some(({ totalIncome, totalExpense }) => totalIncome !== 0 || totalExpense !== 0)
 
   return (
     <div className="report-section">
-      <ReportSectionHeader
-        title="Hiệu suất dòng tiền"
-        description="Ba chỉ số quan trọng nhất được ưu tiên ở trên cùng để bạn đọc nhanh bức tranh tài chính tháng."
-        action={
-          <MonthYearSelector
-            year={year}
-            month={month}
-            onChange={(yearValue, monthValue) => {
-              setYear(yearValue)
-              setMonth(monthValue)
-            }}
-          />
-        }
-      />
+      {overview.isLoading ? <ReportStatus message="Đang tải tổng quan…" /> : overview.data
+        ? <OverviewMetrics data={overview.data} />
+        : <ReportStatus message="Không thể tải tổng quan." error />}
 
-      <div className="report-metric-grid">
-        <MetricCard
-          label="Tổng thu"
-          value={formatCurrency(overview?.totalIncome || 0)}
-          meta={`${overview?.incomeCount || 0} giao dịch${
-            comparison?.incomeChangePercent !== null && comparison?.incomeChangePercent !== undefined
-              ? ` • ${comparison.incomeChangePercent >= 0 ? 'Tăng' : 'Giảm'} ${Math.abs(comparison.incomeChangePercent)}%`
-              : ''
-          }`}
-          tone="income"
-        />
-        <MetricCard
-          label="Tổng chi"
-          value={formatCurrency(overview?.totalExpense || 0)}
-          meta={`${overview?.expenseCount || 0} giao dịch${
-            comparison?.expenseChangePercent !== null && comparison?.expenseChangePercent !== undefined
-              ? ` • ${comparison.expenseChangePercent >= 0 ? 'Tăng' : 'Giảm'} ${Math.abs(comparison.expenseChangePercent)}%`
-              : ''
-          }`}
-          tone="expense"
-        />
-        <MetricCard
-          label="Tiết kiệm"
-          value={formatCurrency(overview?.difference || 0)}
-          meta={`${savingsRate}% tỷ lệ tiết kiệm trong kỳ đã chọn`}
-          tone="savings"
-        />
+      <div className="report-grid reports-overview-grid">
+        <ReportCard
+          title="Dòng tiền 6 tháng gần nhất"
+          subtitle={`${formatDate(historyStart)} – ${formatDate(endDate)}`}
+          action={hasTrendActivity ? (
+            <div className="reports-chart-legend" aria-hidden="true">
+              <span className="reports-legend-income">Thu</span>
+              <span className="reports-legend-expense">Chi</span>
+              <span className="reports-legend-rate">Tỷ lệ tiết kiệm</span>
+            </div>
+          ) : undefined}
+        >
+          {trend.isLoading ? <ReportStatus message="Đang tải dòng tiền…" /> : trend.isError && !trend.data
+            ? <ReportStatus message="Không thể tải dòng tiền." error />
+            : hasTrendActivity && trend.data ? <CashflowTrendChart data={trend.data} />
+              : <ReportStatus message="Chưa có dữ liệu dòng tiền trong 6 tháng này." />}
+        </ReportCard>
+
+        <ReportCard title="Điểm nổi bật">
+          {insights.isLoading ? <ReportStatus message="Đang tải điểm nổi bật…" /> : insights.isError && !insights.data
+            ? <ReportStatus message="Không thể tải điểm nổi bật." error />
+            : insights.data?.length ? <InsightCards insights={insights.data} />
+              : <ReportStatus message="Chưa có điểm nổi bật trong kỳ này." />}
+          <button type="button" className="reports-category-link reports-print-hide" onClick={onViewCategories}>
+            Xem chi tiết theo danh mục <span aria-hidden="true">→</span>
+          </button>
+        </ReportCard>
       </div>
-
-      <ReportCard
-        title="Dòng tiền theo tháng"
-        subtitle={`So sánh tổng thu và tổng chi cho tháng ${month}/${year}.`}
-      >
-        {overview ? <IncomeExpenseBarChart data={overview} /> : null}
-      </ReportCard>
     </div>
   )
 }
 
-function CategoriesTab() {
-  const [period, setPeriod] = useState<PeriodValue>(getInitialPeriod)
+function CategoriesTab({ period }: { period: ReportPeriod }) {
   const { startDate, endDate } = period
-  const { data: categories, isLoading } = useExpensesByCategory(startDate, endDate)
+  const { data: categories, isLoading, isError } = useExpensesByCategory(startDate, endDate)
   const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string } | null>(null)
 
-  if (isLoading) {
-    return <LoadingState />
-  }
+  if (isLoading) return <ReportStatus message="Đang tải danh mục…" />
+  if (isError && !categories) return <ReportStatus message="Không thể tải danh mục." error />
 
   return (
     <div className="report-section">
-      <ReportSectionHeader
-        title="Chi tiêu theo danh mục"
-        description="Kết hợp donut chart và bảng chi tiết để đọc nhanh danh mục chi phối và drill-down khi cần."
-      />
-
-      <div className="report-toolbar">
-        <PeriodFilter value={period} onChange={setPeriod} />
-      </div>
-
       <div className="report-grid report-grid--wide">
         <ReportCard
           title="Cơ cấu chi tiêu"
@@ -289,57 +346,55 @@ function CategoriesTab() {
 
         <ReportCard
           title="Danh mục nổi bật"
-          subtitle="Nhấn vào một hàng để xem giao dịch chi tiết của danh mục đó."
+          subtitle="Chọn một danh mục để xem các giao dịch."
         >
           {categories && categories.length > 0 ? (
-            <table className="report-table report-table--interactive">
+            <table className="report-table reports-category-table">
               <thead>
                 <tr>
                   <th>Danh mục</th>
                   <th className="report-table__align-right">Số tiền</th>
                   <th className="report-table__align-right">Tỷ trọng</th>
+                  <th className="report-table__align-right">So với kỳ trước</th>
                 </tr>
               </thead>
               <tbody>
                 {categories.map((category) => (
                   <tr
                     key={category.categoryId}
-                    onClick={() =>
-                      setSelectedCategory({
-                        id: category.categoryId,
-                        name: category.categoryName,
-                      })
-                    }
+                    onClick={() => setSelectedCategory({ id: category.categoryId, name: category.categoryName })}
                   >
                     <td>
-                      <div className="report-category-cell">
-                        <span
-                          className="report-category-cell__dot"
-                          style={{ backgroundColor: category.categoryColor || '#4f46e5' }}
-                        />
-                        <div className="report-category-cell__content">
-                          <span className="report-category-cell__name">
-                            {category.categoryIcon ? `${category.categoryIcon} ` : ''}
-                            {category.categoryName}
-                          </span>
-                          <span className="report-category-cell__hint">Nhấn để xem drill-down</span>
-                        </div>
-                      </div>
+                      <button
+                        className="report-category-cell"
+                        type="button"
+                        aria-label={`Xem giao dịch của ${category.categoryName}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setSelectedCategory({ id: category.categoryId, name: category.categoryName })
+                        }}
+                      >
+                        <span className="report-category-cell__dot" aria-hidden="true"
+                          style={{ backgroundColor: category.categoryColor || '#4f46e5' }} />
+                        {category.categoryIcon ? <span aria-hidden="true">{category.categoryIcon}</span> : null}
+                        <span className="report-category-cell__name">{category.categoryName}</span>
+                      </button>
                     </td>
                     <td className="report-table__align-right report-table__value">
                       {formatCurrency(category.totalAmount)}
                     </td>
                     <td className="report-table__align-right">
-                      <span className="report-percentage-pill">{category.percentage.toFixed(1)}%</span>
+                      <span className="report-percentage-pill">{numberFormat.format(category.percentage)}%</span>
+                    </td>
+                    <td className="report-table__align-right">
+                      {category.changePercent == null ? '—' : `${signedNumberFormat.format(category.changePercent)}%`}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <div className="report-empty-state report-empty-state--compact">
-              <div className="report-empty-state__label">Không có chi tiêu trong kỳ đã chọn.</div>
-            </div>
+            <ReportStatus message="Không có chi tiêu trong kỳ đã chọn." />
           )}
         </ReportCard>
       </div>
@@ -358,126 +413,81 @@ function CategoriesTab() {
   )
 }
 
-function TrendTab() {
-  const [period, setPeriod] = useState<PeriodValue>(getInitialPeriod)
+function TrendTab({ period }: { period: ReportPeriod }) {
   const { startDate, endDate } = period
-  const { data: trend, isLoading: isTrendLoading } = useIncomeExpenseTrend(undefined, startDate, endDate)
-  const { data: topExpenses, isLoading: isTopExpensesLoading } = useTopExpenses(startDate, endDate, 10)
-
-  if (isTrendLoading || isTopExpensesLoading) {
-    return <LoadingState />
-  }
+  const trend = useIncomeExpenseTrend(undefined, startDate, endDate)
+  const topExpenses = useTopExpenses(startDate, endDate, 10)
+  const hasTrendActivity = trend.data?.some(({ totalIncome, totalExpense }) => totalIncome !== 0 || totalExpense !== 0)
 
   return (
     <div className="report-section">
-      <ReportSectionHeader
-        title="Xu hướng thu chi"
-        description="Theo dõi chuyển động tổng thể và nhanh chóng phát hiện các giao dịch chi tiêu bất thường."
-      />
-
-      <div className="report-toolbar">
-        <PeriodFilter value={period} onChange={setPeriod} />
-      </div>
-
       <div className="report-grid">
         <ReportCard
           title="Biểu đồ xu hướng"
           subtitle="Thu, chi và mức chi trung bình trong giai đoạn đã chọn."
         >
-          <TrendLineChart data={trend || []} />
+          {trend.isLoading ? <ReportStatus message="Đang tải xu hướng…" /> : trend.isError && !trend.data
+            ? <ReportStatus message="Không thể tải xu hướng." error />
+            : hasTrendActivity && trend.data ? <TrendLineChart data={trend.data} />
+              : <ReportStatus message="Chưa có dữ liệu thu chi trong kỳ này." />}
         </ReportCard>
 
-        <ReportCard
-          title="Top 10 chi tiêu lớn nhất"
-          subtitle="Danh sách giao dịch cần ưu tiên rà soát trong cùng kỳ."
-        >
-          <TopExpensesTable data={(topExpenses as Transaction[]) || []} />
+        <ReportCard title="Top 10 chi tiêu lớn nhất">
+          {topExpenses.isLoading ? <ReportStatus message="Đang tải khoản chi…" /> : topExpenses.data
+            ? <TopExpensesTable data={topExpenses.data} />
+            : <ReportStatus message="Không thể tải các khoản chi." error />}
         </ReportCard>
       </div>
     </div>
   )
 }
 
-function BudgetTab() {
-  const today = new Date()
-  const [year, setYear] = useState(today.getFullYear())
-  const [month, setMonth] = useState(today.getMonth() + 1)
-  const { data, isLoading } = useBudgetVsActual(year, month)
-
-  if (isLoading) {
-    return <LoadingState />
-  }
+function BudgetTab({ year, month }: { year: number; month: number }) {
+  const { data, isLoading, isError } = useBudgetVsActual(year, month)
 
   return (
-    <div className="report-section">
-      <ReportSectionHeader
-        title="Kiểm soát ngân sách"
-        description="Đặt khu vực chart vào một card duy nhất để việc so sánh kế hoạch và thực tế rõ ràng hơn."
-        action={
-          <MonthYearSelector
-            year={year}
-            month={month}
-            onChange={(yearValue, monthValue) => {
-              setYear(yearValue)
-              setMonth(monthValue)
-            }}
-          />
-        }
-      />
-
-      <ReportCard
-        title="Ngân sách vs thực tế"
-        subtitle={`So sánh theo từng danh mục trong tháng ${month}/${year}.`}
-      >
-        <BudgetComparisonChart data={data || []} />
-      </ReportCard>
-    </div>
+    <ReportCard title="Ngân sách so với thực tế" subtitle={`Tháng ${month}/${year}`}>
+      {isLoading ? <ReportStatus message="Đang tải ngân sách…" /> : isError && !data
+        ? <ReportStatus message="Không thể tải ngân sách." error />
+        : <BudgetComparisonChart data={data ?? []} />}
+    </ReportCard>
   )
 }
 
-function AssetsTab() {
-  const [assetsPeriod, setAssetsPeriod] = useState<AssetsPeriod>('12')
-  const { data: allocation, isLoading: isAllocationLoading } = useAssetAllocation()
-  const { data: netWorthHistory, isLoading: isHistoryLoading } = useNetWorthHistory()
-
-  const historyPoints = netWorthHistory
-    ? (assetsPeriod === '6'
-        ? (netWorthHistory as unknown[]).slice(-6)
-        : assetsPeriod === '12'
-          ? (netWorthHistory as unknown[]).slice(-12)
-          : netWorthHistory) as import('@pf/shared').NetWorthHistoryPoint[]
-    : []
-
-  if (isAllocationLoading || isHistoryLoading) {
-    return <LoadingState />
-  }
+function AssetsTab({
+  assetHistoryPeriod,
+  onPeriodChange,
+}: {
+  assetHistoryPeriod: AssetHistoryPeriod
+  onPeriodChange: (period: AssetHistoryPeriod) => void
+}) {
+  const allocation = useAssetAllocation()
+  const limit = assetHistoryPeriod === 'all' ? undefined : Number(assetHistoryPeriod)
+  const history = useNetWorthHistory(limit)
 
   return (
     <div className="report-section">
-      <ReportSectionHeader
-        title="Tài sản và net worth"
-        description="Kết hợp góc nhìn phân bổ tài sản với đà tăng trưởng tổng tài sản ròng."
-      />
-
       <div className="report-grid">
         <ReportCard
           title="Phân bổ tài sản"
           subtitle="Tỷ trọng từng nhóm tài sản trong danh mục hiện tại."
         >
-          <AssetAllocationChart data={allocation || []} />
+          {allocation.isLoading ? <ReportStatus message="Đang tải phân bổ tài sản…" /> : allocation.data
+            ? <AssetAllocationChart data={allocation.data} />
+            : <ReportStatus message="Không thể tải phân bổ tài sản." error />}
         </ReportCard>
 
         <ReportCard
-          title="Lịch sử net worth"
-          subtitle="Chọn khung thời gian để nhìn rõ mức tăng trưởng gần đây hoặc toàn bộ lịch sử."
+          title="Lịch sử tài sản ròng"
           action={
-            <div className="report-toggle-group" role="tablist" aria-label="Khung thời gian net worth">
-              {(['6', '12', 'all'] as AssetsPeriod[]).map((period) => (
+            <div className="report-toggle-group reports-print-hide" role="group" aria-label="Khung thời gian tài sản ròng">
+              {(['6', '12', 'all'] as const).map((period) => (
                 <button
                   key={period}
                   type="button"
-                  onClick={() => setAssetsPeriod(period)}
-                  className={`report-toggle-button${assetsPeriod === period ? ' is-active' : ''}`}
+                  onClick={() => onPeriodChange(period)}
+                  aria-pressed={assetHistoryPeriod === period}
+                  className={`report-toggle-button${assetHistoryPeriod === period ? ' is-active' : ''}`}
                 >
                   {period === '6' ? '6 tháng' : period === '12' ? '12 tháng' : 'Tất cả'}
                 </button>
@@ -485,60 +495,36 @@ function AssetsTab() {
             </div>
           }
         >
-          <NetWorthTrendChart data={historyPoints} />
+          {history.isLoading ? <ReportStatus message="Đang tải lịch sử tài sản ròng…" /> : history.data
+            ? <NetWorthTrendChart data={history.data} />
+            : <ReportStatus message="Không thể tải lịch sử tài sản ròng." error />}
         </ReportCard>
       </div>
     </div>
   )
 }
 
-function AnnualTab() {
-  const [year, setYear] = useState(new Date().getFullYear())
+function AnnualTab({ year }: { year: number }) {
   const { data, isLoading } = useAnnualSummary(year)
-  const years = Array.from({ length: 4 }, (_, index) => new Date().getFullYear() - index)
 
-  if (isLoading) {
-    return <LoadingState />
-  }
+  if (isLoading) return <ReportStatus message="Đang tải báo cáo năm…" />
+  if (!data) return <ReportStatus message="Không thể tải báo cáo năm." error />
 
   return (
     <div className="report-section">
-      <ReportSectionHeader
-        title="Tổng kết năm"
-        description="Một bố cục rõ thứ tự ưu tiên: KPI trên cùng, xu hướng 12 tháng ở giữa, bảng đối chiếu phía dưới."
-        action={
-          <select
-            value={year}
-            onChange={(event) => setYear(Number(event.target.value))}
-            className="report-select"
-          >
-            {years.map((yearValue) => (
-              <option key={yearValue} value={yearValue}>
-                {yearValue}
-              </option>
-            ))}
-          </select>
-        }
-      />
-
+      <h2 className="reports-section-title">Tổng kết năm {year}</h2>
       <div className="report-metric-grid report-metric-grid--dense">
-        <MetricCard label="Tổng thu" value={formatCurrency(data?.totalIncome || 0)} meta={`Hiệu quả toàn năm ${year}`} tone="income" />
-        <MetricCard label="Tổng chi" value={formatCurrency(data?.totalExpense || 0)} meta="Tổng chi phát sinh trong năm" tone="expense" />
-        <MetricCard label="TB thu / tháng" value={formatCurrency(data?.averageIncome || 0)} meta="Mức thu trung bình theo tháng" tone="neutral" />
-        <MetricCard label="TB chi / tháng" value={formatCurrency(data?.averageExpense || 0)} meta="Mức chi trung bình theo tháng" tone="savings" />
+        <MetricCard label="Tổng thu" value={formatCurrency(data.totalIncome)} tone="income" />
+        <MetricCard label="Tổng chi" value={formatCurrency(data.totalExpense)} tone="expense" />
+        <MetricCard label="TB thu / tháng" value={formatCurrency(data.averageIncome)} tone="neutral" />
+        <MetricCard label="TB chi / tháng" value={formatCurrency(data.averageExpense)} tone="savings" />
       </div>
 
-      <ReportCard
-        title="Biểu đồ thu chi 12 tháng"
-        subtitle="Đặt biểu đồ ở vị trí trung tâm để dễ nhìn nhịp tăng giảm của cả năm."
-      >
-        <AnnualBarChart data={data?.monthly || []} />
+      <ReportCard title="Biểu đồ thu chi 12 tháng">
+        <AnnualBarChart data={data.monthly} />
       </ReportCard>
 
-      <ReportCard
-        title="Bảng chênh lệch theo tháng"
-        subtitle="Các tháng âm được tô nền nhẹ để dễ phát hiện hơn khi rà soát."
-      >
+      <ReportCard title="Bảng chênh lệch theo tháng">
         <table className="report-table">
           <thead>
             <tr>
@@ -549,7 +535,7 @@ function AnnualTab() {
             </tr>
           </thead>
           <tbody>
-            {data?.monthly.map((monthItem) => (
+            {data.monthly.map((monthItem) => (
               <tr key={monthItem.month} className={monthItem.difference < 0 ? 'report-table__row--negative' : ''}>
                 <td>Tháng {parseInt(monthItem.month.split('-')[1], 10)}</td>
                 <td className="report-table__align-right report-table__value report-table__value--income">
@@ -574,51 +560,233 @@ function AnnualTab() {
   )
 }
 
-export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('overview')
+function PeriodControls({
+  period,
+  onChange,
+}: {
+  period: ReportPeriod
+  onChange: (period: ReportPeriod) => void
+}) {
+  const [editingPeriod, setEditingPeriod] = useState<ReportPeriod | null>(null)
+  const [dateError, setDateError] = useState('')
+  const editing = editingPeriod === period
+
+  function handlePreset(preset: ReportPeriod['preset']) {
+    setDateError('')
+    setEditingPeriod(preset === 'custom' && !editing ? period : null)
+    if (preset !== 'custom') onChange(getPresetPeriod(preset))
+  }
+
+  function applyCustomPeriod(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const startDate = String(data.get('startDate'))
+    const endDate = String(data.get('endDate'))
+    if (startDate > endDate) {
+      setDateError('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.')
+      return
+    }
+
+    setDateError('')
+    setEditingPeriod(null)
+    onChange({ preset: 'custom', startDate, endDate })
+  }
 
   return (
-    <div className="reports-shell">
-      <section className="reports-hero">
-        <div className="reports-hero__content">
-          <div className="reports-hero__copy">
-            <span className="reports-hero__eyebrow">Báo cáo tài chính</span>
-            <h1 className="reports-hero__title">Báo cáo</h1>
-            <p className="reports-hero__subtitle">
-              Theo dõi xu hướng chi tiêu, ngân sách và tài sản theo từng giai đoạn trong một workspace rõ ràng hơn.
-            </p>
-          </div>
-
-          <div className="reports-hero__spotlight">
-            <span className="reports-hero__badge">{TAB_CONTENT[activeTab].eyebrow}</span>
-            <strong className="reports-hero__spotlight-title">
-              {TABS.find((tab) => tab.id === activeTab)?.label}
-            </strong>
-            <p className="reports-hero__spotlight-text">{TAB_CONTENT[activeTab].description}</p>
+    <>
+      <div className="reports-period-row">
+        <div className="reports-presets-scroll reports-print-hide">
+          <div className="reports-presets" role="group" aria-label="Kỳ báo cáo">
+            {PRESETS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={period.preset === id}
+                aria-expanded={id === 'custom' ? editing : undefined}
+                onClick={() => handlePreset(id)}
+              >
+                {id === 'custom' ? <ReportIcon path={CALENDAR_ICON} /> : null}
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="reports-tabs" role="tablist" aria-label="Các loại báo cáo">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              aria-selected={activeTab === tab.id}
-              className={`reports-tab${activeTab === tab.id ? ' is-active' : ''}`}
-            >
-              {tab.label}
+        <p className="reports-period-summary">
+          <ReportIcon path={CALENDAR_ICON} />
+          <span>{formatDate(period.startDate)} – {formatDate(period.endDate)}</span>
+        </p>
+      </div>
+
+      {editing ? (
+        <form className="reports-custom-period reports-print-hide" onSubmit={applyCustomPeriod}>
+          <label>Từ ngày<input name="startDate" type="date" min="0001-01-01" max="9999-12-31"
+            defaultValue={period.startDate} required /></label>
+          <label>Đến ngày<input name="endDate" type="date" min="0001-01-01" max="9999-12-31"
+            defaultValue={period.endDate} required /></label>
+          <button type="submit" className="reports-primary-button">Áp dụng</button>
+          {dateError ? <p role="alert">{dateError}</p> : null}
+        </form>
+      ) : null}
+    </>
+  )
+}
+
+function ReportTabs({ activeTab, onChange }: { activeTab: ReportTabId; onChange: (tab: ReportTabId) => void }) {
+  const tabList = useRef<HTMLDivElement>(null)
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next: number
+    switch (event.key) {
+      case 'ArrowLeft':
+        next = (index + TABS.length - 1) % TABS.length
+        break
+      case 'ArrowRight':
+        next = (index + 1) % TABS.length
+        break
+      case 'Home':
+        next = 0
+        break
+      case 'End':
+        next = TABS.length - 1
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+    onChange(TABS[next].id)
+    tabList.current?.querySelectorAll('button')[next]?.focus()
+  }
+
+  return (
+    <div className="reports-tabs reports-print-hide" ref={tabList} role="tablist" aria-label="Các loại báo cáo">
+      {TABS.map(({ id, label, icon }, index) => (
+        <button key={id} type="button" id={`report-tab-${id}`} role="tab" className="reports-tab"
+          aria-selected={activeTab === id} aria-controls={activeTab === id ? 'report-panel' : undefined}
+          tabIndex={activeTab === id ? 0 : -1}
+          onClick={() => onChange(id)} onKeyDown={(event) => handleKeyDown(event, index)}>
+          <ReportIcon path={icon} />
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export default function ReportsPage() {
+  const [activeTab, setActiveTab] = useState<ReportTabId>('overview')
+  const [period, setPeriod] = useState(() => getPresetPeriod('this_month'))
+  const [assetHistoryPeriod, setAssetHistoryPeriod] = useState<AssetHistoryPeriod>('12')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const exportReport = useExportReport()
+  const exportMenu = useRef<HTMLDetailsElement>(null)
+  const [year, month] = period.endDate.split('-').map(Number)
+  const today = localToday()
+  const previousMonth = shiftMonthStart(period.endDate, -1)
+  const nextMonth = shiftMonthStart(period.endDate, 1)
+  const canUseTrend = getMonthCount(period.startDate, period.endDate) <= MAX_TREND_MONTHS
+  const activeLabel = TABS.find(({ id }) => id === activeTab)?.label
+
+  function navigateMonth(startDate: string | null) {
+    if (startDate) setPeriod(getNavigatedPeriod(startDate, today))
+  }
+
+  function closeExportMenu(restoreFocus = false) {
+    if (restoreFocus) exportMenu.current?.querySelector('summary')?.focus()
+    if (exportMenu.current) exportMenu.current.open = false
+  }
+
+  function exportCsv() {
+    closeExportMenu(true)
+    exportReport.mutate({
+      tab: activeTab,
+      startDate: period.startDate,
+      endDate: period.endDate,
+      assetHistoryPeriod,
+    })
+  }
+
+  function printReport() {
+    closeExportMenu(true)
+    window.print()
+  }
+
+  return (
+    <div className={`reports-shell finance-reports${mobileNavOpen ? ' reports-mobile-nav-open' : ''}`}>
+      <header className="reports-page-header">
+        <div className="reports-page-heading">
+          <h1>Báo cáo</h1>
+          <p>Phân tích thu chi, ngân sách và tài sản theo kỳ</p>
+        </div>
+
+        <button
+          type="button"
+          className="reports-mobile-nav reports-print-hide"
+          aria-label={mobileNavOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen((open) => !open)}
+        >
+          <ReportIcon path={mobileNavOpen ? 'm5 5 14 14M19 5 5 19' : 'M4 6h16M4 12h16M4 18h16'} />
+        </button>
+
+        <div className="reports-page-actions reports-print-hide">
+          <div className="reports-month-nav" role="group" aria-label="Điều hướng theo tháng">
+            <button type="button" aria-label="Tháng trước" onClick={() => navigateMonth(previousMonth)} disabled={!previousMonth}>
+              <ReportIcon path="m15 5-7 7 7 7" />
             </button>
-          ))}
-        </div>
-      </section>
+            <span>Tháng {month}/{year}</span>
+            <button type="button" aria-label="Tháng sau" onClick={() => navigateMonth(nextMonth)} disabled={!nextMonth}>
+              <ReportIcon path="m9 5 7 7-7 7" />
+            </button>
+          </div>
 
-      {activeTab === 'overview' ? <OverviewTab /> : null}
-      {activeTab === 'categories' ? <CategoriesTab /> : null}
-      {activeTab === 'trend' ? <TrendTab /> : null}
-      {activeTab === 'budget' ? <BudgetTab /> : null}
-      {activeTab === 'assets' ? <AssetsTab /> : null}
-      {activeTab === 'annual' ? <AnnualTab /> : null}
+          <details
+            ref={exportMenu}
+            className="reports-export-menu"
+            onBlur={(event) => {
+              if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) closeExportMenu()
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') closeExportMenu(true)
+            }}
+          >
+            <summary className="reports-primary-button" aria-label="Xuất báo cáo" title="Xuất báo cáo">
+              <ReportIcon path="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4" />
+              <span>{exportReport.isPending ? 'Đang xuất…' : 'Xuất báo cáo'}</span>
+            </summary>
+            <div className="reports-export-options">
+              <button type="button" onClick={exportCsv} disabled={exportReport.isPending || (activeTab === 'trend' && !canUseTrend)}>
+                Tải xuống CSV
+              </button>
+              <button type="button" onClick={printReport}>In / Lưu PDF</button>
+            </div>
+          </details>
+        </div>
+      </header>
+
+      {exportReport.isError ? (
+        <p className="reports-export-feedback reports-print-hide" role="alert">
+          {exportReport.error.message}
+        </p>
+      ) : null}
+
+      <PeriodControls period={period} onChange={setPeriod} />
+      <ReportTabs activeTab={activeTab} onChange={setActiveTab} />
+      <p className="reports-printed-tab">{activeLabel}</p>
+
+      <div id="report-panel" role="tabpanel" aria-labelledby={`report-tab-${activeTab}`} tabIndex={0}>
+        {activeTab === 'overview' ? <OverviewTab period={period} onViewCategories={() => setActiveTab('categories')} /> : null}
+        {activeTab === 'categories' ? (
+          <CategoriesTab key={`${period.startDate}:${period.endDate}`} period={period} />
+        ) : null}
+        {activeTab === 'trend' ? canUseTrend
+          ? <TrendTab period={period} />
+          : <ReportStatus message="Chọn một kỳ tối đa 12 tháng để xem và xuất báo cáo xu hướng." />
+          : null}
+        {activeTab === 'budget' ? <BudgetTab year={year} month={month} /> : null}
+        {activeTab === 'assets' ? <AssetsTab assetHistoryPeriod={assetHistoryPeriod} onPeriodChange={setAssetHistoryPeriod} /> : null}
+        {activeTab === 'annual' ? <AnnualTab year={year} /> : null}
+      </div>
     </div>
   )
 }
