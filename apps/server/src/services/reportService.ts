@@ -1,7 +1,7 @@
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../db'
 import { transactions, categories, userProfiles, budgets, categoryBudgets } from '../db/schema'
-import type { MonthlyOverview, MonthComparison, CategoryExpense, TrendDataPoint, BudgetComparisonItem, DateFilterPreset, DateRange, ReportInsight, ReportPeriodOverview } from '@pf/shared'
+import type { MonthlyOverview, MonthComparison, CategoryExpense, TrendDataPoint, BudgetComparisonItem, DateFilterPreset, DateRange, ReportInsight, ReportPeriodOverview, ReportTabId } from '@pf/shared'
 import { getNetWorth, getNetWorthHistory } from './assetService'
 
 // Resolve authUserId → userProfile.id
@@ -527,5 +527,82 @@ export function getAnnualSummary(authUserId: string, year: number) {
     totalExpense,
     averageIncome: Math.round(totalIncome / 12),
     averageExpense: Math.round(totalExpense / 12),
+  }
+}
+
+type CsvCell = string | number | null | undefined
+
+function csvCell(value: CsvCell): string {
+  const raw = String(value ?? '')
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(raw) ? `'${raw}` : raw
+  return `"${safe.replaceAll('"', '""')}"`
+}
+
+function formatCsv(header: string[], rows: CsvCell[][]): string {
+  return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
+}
+
+export function exportReportCsv(authUserId: string, tab: ReportTabId, startDate: string, endDate: string): string {
+  switch (tab) {
+    case 'overview': {
+      const { current, previous, changes } = getReportOverview(authUserId, startDate, endDate)
+      return formatCsv(['metric', 'current', 'previous', 'change_percent'], [
+        ['start_date', startDate, previous?.startDate, null],
+        ['end_date', endDate, previous?.endDate, null],
+        ['total_income_cents', current.totalIncome, previous?.overview.totalIncome, changes.incomePercent],
+        ['total_expense_cents', current.totalExpense, previous?.overview.totalExpense, changes.expensePercent],
+        ['difference_cents', current.difference, previous?.overview.difference, changes.savingsPercent],
+        ['transaction_count', current.transactionCount, previous?.overview.transactionCount, null],
+        ['income_count', current.incomeCount, previous?.overview.incomeCount, null],
+        ['expense_count', current.expenseCount, previous?.overview.expenseCount, null],
+      ])
+    }
+    case 'categories': {
+      const rows = getExpensesByCategory(authUserId, startDate, endDate)
+      return formatCsv(
+        ['category', 'total_amount_cents', 'previous_amount_cents', 'change_percent', 'percentage', 'transaction_count'],
+        rows.map(({ categoryName, totalAmount, previousAmount, changePercent, percentage, transactionCount }) =>
+          [categoryName, totalAmount, previousAmount, changePercent, percentage, transactionCount]),
+      )
+    }
+    case 'trend': {
+      const rows = getIncomeExpenseTrendRange(authUserId, startDate, endDate)
+      return formatCsv(
+        ['month', 'total_income_cents', 'total_expense_cents', 'average_expense_cents', 'savings_rate_percent'],
+        rows.map(({ month, totalIncome, totalExpense, averageExpense, savingsRate }) =>
+          [month, totalIncome, totalExpense, averageExpense, savingsRate]),
+      )
+    }
+    case 'budget': {
+      const monthKey = endDate.slice(0, 7)
+      const [year, month] = monthKey.split('-').map(Number)
+      const rows = getBudgetVsActual(authUserId, year, month)
+      return formatCsv(
+        ['month', 'category', 'budget_amount_cents', 'actual_amount_cents', 'percentage'],
+        rows.map(({ categoryName, budgetAmount, actualAmount, percentage }) =>
+          [monthKey, categoryName, budgetAmount, actualAmount, percentage]),
+      )
+    }
+    case 'assets': {
+      const startMonth = startDate.slice(0, 7)
+      const endMonth = endDate.slice(0, 7)
+      const allocation = getAssetAllocation(authUserId)
+      const history = getNetWorthHistory(authUserId).filter(({ month }) => month >= startMonth && month <= endMonth)
+      return formatCsv(
+        ['row_type', 'month', 'asset_type', 'asset_label', 'total_value_cents', 'allocation_percent', 'net_worth_cents'],
+        [
+          ...allocation.map(({ type, label, totalValue, percentage }) =>
+            ['allocation', null, type, label, totalValue, percentage, null]),
+          ...history.map(({ month, netWorth }) => ['net_worth', month, null, null, null, null, netWorth]),
+        ],
+      )
+    }
+    case 'annual': {
+      const { monthly } = getAnnualSummary(authUserId, Number(endDate.slice(0, 4)))
+      return formatCsv(
+        ['month', 'income_cents', 'expense_cents', 'difference_cents'],
+        monthly.map(({ month, income, expense, difference }) => [month.padStart(7, '0'), income, expense, difference]),
+      )
+    }
   }
 }

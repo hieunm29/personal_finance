@@ -26,15 +26,34 @@ const overviewQuery = z.union([
 ])
 
 const maxTrendMonths = 12
-const trendQuery = optionalReportDateRangeQuery.extend({
-  months: z.string().transform(Number).pipe(z.number().int().nonnegative()).optional(),
-}).refine(isOrderedDateRange, dateRangeMessage).refine(({ startDate, endDate }) => {
+const trendRangeMessage = `The trend date range can span at most ${maxTrendMonths} calendar months`
+
+function isSupportedTrendRange({ startDate, endDate }: { startDate?: string; endDate?: string }): boolean {
   if (!startDate || !endDate) return true
   const [startYear, startMonth] = startDate.split('-').map(Number)
   const [endYear, endMonth] = endDate.split('-').map(Number)
   const monthCount = (endYear - startYear) * 12 + endMonth - startMonth + 1
   return monthCount <= maxTrendMonths
-}, `The trend date range can span at most ${maxTrendMonths} calendar months`)
+}
+
+const trendQuery = optionalReportDateRangeQuery.extend({
+  months: z.string().transform(Number).pipe(z.number().int().nonnegative()).optional(),
+}).refine(isOrderedDateRange, dateRangeMessage).refine(isSupportedTrendRange, trendRangeMessage)
+
+const exportQuery = reportDateRangeQuery.extend({
+  tab: z.enum(['overview', 'categories', 'trend', 'budget', 'assets', 'annual']),
+}).refine(isOrderedDateRange, dateRangeMessage)
+  .refine((query) => query.tab !== 'trend' || isSupportedTrendRange(query), trendRangeMessage)
+
+app.get('/export', zValidator('query', exportQuery), (c) => {
+  const { tab, startDate, endDate } = c.req.valid('query')
+  const csv = reportService.exportReportCsv(c.get('userId'), tab, startDate, endDate)
+  return c.body(csv, 200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': `attachment; filename="personal-finance_report_${tab}_${startDate}_${endDate}.csv"`,
+    'Cache-Control': 'no-store',
+  })
+})
 
 // US-RPT-01: Monthly Overview
 app.get('/overview', zValidator('query', overviewQuery), async (c) => {
