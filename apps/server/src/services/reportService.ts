@@ -190,7 +190,7 @@ function getCategoryExpenseRows(profileId: string, startDate: string, endDate: s
       transactionCount: sql<number>`COUNT(*)`,
     })
     .from(transactions)
-    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .leftJoin(categories, and(eq(transactions.categoryId, categories.id), eq(categories.userId, profileId)))
     .where(
       and(
         eq(transactions.userId, profileId),
@@ -312,7 +312,7 @@ function getBudgetComparisonForRange(profileId: string, { startDate, endDate }: 
     })
     .from(budgets)
     .leftJoin(categoryBudgets, eq(budgets.id, categoryBudgets.budgetId))
-    .leftJoin(categories, eq(categoryBudgets.categoryId, categories.id))
+    .leftJoin(categories, and(eq(categoryBudgets.categoryId, categories.id), eq(categories.userId, profileId)))
     .where(and(eq(budgets.userId, profileId), eq(budgets.month, monthStr)))
     .all()
 
@@ -531,10 +531,14 @@ export function getAnnualSummary(authUserId: string, year: number) {
 }
 
 type CsvCell = string | number | null | undefined
+type AssetHistoryPeriod = '6' | '12' | 'all'
 
 function csvCell(value: CsvCell): string {
-  const raw = String(value ?? '')
-  const safe = /^[\t\r\n ]*[=+\-@]/.test(raw) ? `'${raw}` : raw
+  if (typeof value === 'number') return Number.isFinite(value) ? `"${value}"` : '""'
+
+  const raw = value ?? ''
+  // Spreadsheet imports may skip leading whitespace or recognize full-width formula markers.
+  const safe = /^\p{White_Space}*[\p{Cc}\p{Cf}=+\-@＝＋－＠]/u.test(raw) ? `'${raw}` : raw
   return `"${safe.replaceAll('"', '""')}"`
 }
 
@@ -542,7 +546,13 @@ function formatCsv(header: string[], rows: CsvCell[][]): string {
   return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }
 
-export function exportReportCsv(authUserId: string, tab: ReportTabId, startDate: string, endDate: string): string {
+export function exportReportCsv(
+  authUserId: string,
+  tab: ReportTabId,
+  startDate: string,
+  endDate: string,
+  assetHistoryPeriod: AssetHistoryPeriod = '12',
+): string {
   switch (tab) {
     case 'overview': {
       const { current, previous, changes } = getReportOverview(authUserId, startDate, endDate)
@@ -584,10 +594,9 @@ export function exportReportCsv(authUserId: string, tab: ReportTabId, startDate:
       )
     }
     case 'assets': {
-      const startMonth = startDate.slice(0, 7)
-      const endMonth = endDate.slice(0, 7)
       const allocation = getAssetAllocation(authUserId)
-      const history = getNetWorthHistory(authUserId).filter(({ month }) => month >= startMonth && month <= endMonth)
+      const limit = assetHistoryPeriod === 'all' ? undefined : Number(assetHistoryPeriod)
+      const history = getNetWorthHistory(authUserId, limit)
       return formatCsv(
         ['row_type', 'month', 'asset_type', 'asset_label', 'total_value_cents', 'allocation_percent', 'net_worth_cents'],
         [

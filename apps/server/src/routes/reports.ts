@@ -42,12 +42,13 @@ const trendQuery = optionalReportDateRangeQuery.extend({
 
 const exportQuery = reportDateRangeQuery.extend({
   tab: z.enum(['overview', 'categories', 'trend', 'budget', 'assets', 'annual']),
+  assetHistoryPeriod: z.enum(['6', '12', 'all']).optional(),
 }).refine(isOrderedDateRange, dateRangeMessage)
   .refine((query) => query.tab !== 'trend' || isSupportedTrendRange(query), trendRangeMessage)
 
 app.get('/export', zValidator('query', exportQuery), (c) => {
-  const { tab, startDate, endDate } = c.req.valid('query')
-  const csv = reportService.exportReportCsv(c.get('userId'), tab, startDate, endDate)
+  const { tab, startDate, endDate, assetHistoryPeriod } = c.req.valid('query')
+  const csv = reportService.exportReportCsv(c.get('userId'), tab, startDate, endDate, assetHistoryPeriod)
   return c.body(csv, 200, {
     'Content-Type': 'text/csv; charset=utf-8',
     'Content-Disposition': `attachment; filename="personal-finance_report_${tab}_${startDate}_${endDate}.csv"`,
