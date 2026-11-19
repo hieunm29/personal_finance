@@ -6,25 +6,55 @@ import * as reportService from '../services/reportService'
 type Variables = { userId: string }
 const app = new Hono<{ Variables: Variables }>()
 
+const reportDate = z.string().date().refine((date) => !date.startsWith('0000-'))
+const reportDateRangeQuery = z.object({ startDate: reportDate, endDate: reportDate })
+const optionalReportDateRangeQuery = reportDateRangeQuery.partial()
+const dateRangeMessage = 'Provide startDate and endDate together, with startDate on or before endDate'
+
+function isOrderedDateRange({ startDate, endDate }: { startDate?: string; endDate?: string }): boolean {
+  return startDate === undefined ? endDate === undefined : endDate !== undefined && startDate <= endDate
+}
+
+const overviewQuery = z.union([
+  reportDateRangeQuery.refine(isOrderedDateRange, dateRangeMessage),
+  z.object({
+    year: z.string().transform(Number).pipe(z.number().int().min(1).max(9999)),
+    month: z.string().transform(Number).pipe(z.number().int().min(1).max(12)),
+    startDate: z.never().optional(),
+    endDate: z.never().optional(),
+  }),
+])
+
 // US-RPT-01: Monthly Overview
-app.get('/overview', zValidator('query', z.object({
-  year: z.string().transform(Number),
-  month: z.string().transform(Number),
-})), async (c) => {
-  const { year, month } = c.req.valid('query')
+app.get('/overview', zValidator('query', overviewQuery), async (c) => {
+  const query = c.req.valid('query')
   const userId = c.get('userId')
 
-  const overview = reportService.getMonthlyOverview(userId, year, month)
-  const comparison = reportService.getPreviousMonthComparison(userId, year, month)
+  if (!('year' in query)) {
+    return c.json({ data: reportService.getReportOverview(userId, query.startDate, query.endDate) })
+  }
 
-  return c.json({ data: { overview, comparison } })
+  const { startDate, endDate } = reportService.getMonthRange(query.year, query.month)
+  const { current, changes } = reportService.getReportOverview(userId, startDate, endDate)
+  return c.json({
+    data: {
+      overview: current,
+      comparison: {
+        incomeChangePercent: changes.incomePercent,
+        expenseChangePercent: changes.expensePercent,
+      },
+    },
+  })
+})
+
+app.get('/insights', zValidator('query', reportDateRangeQuery.refine(isOrderedDateRange, dateRangeMessage)), async (c) => {
+  const { startDate, endDate } = c.req.valid('query')
+  const data = reportService.getReportInsights(c.get('userId'), startDate, endDate)
+  return c.json({ data })
 })
 
 // US-RPT-02: Expenses by Category
-app.get('/categories', zValidator('query', z.object({
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-})), async (c) => {
+app.get('/categories', zValidator('query', optionalReportDateRangeQuery.refine(isOrderedDateRange, dateRangeMessage)), async (c) => {
   const { startDate, endDate } = c.req.valid('query')
   const userId = c.get('userId')
 
@@ -55,26 +85,15 @@ app.get('/categories/:categoryId/transactions', zValidator('query', z.object({
 })
 
 // US-RPT-03: Income/Expense Trend
-app.get('/trend', zValidator('query', z.object({
-  months: z.string().transform(Number).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-})), async (c) => {
+app.get('/trend', zValidator('query', optionalReportDateRangeQuery.extend({
+  months: z.string().transform(Number).pipe(z.number().int().nonnegative()).optional(),
+}).refine(isOrderedDateRange, dateRangeMessage)), async (c) => {
   const { months, startDate, endDate } = c.req.valid('query')
   const userId = c.get('userId')
 
-  let data: ReturnType<typeof reportService.getIncomeExpenseTrend>
-
-  if (startDate && endDate && !months) {
-    // Custom range: aggregate by month manually
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const monthCount = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1
-    data = reportService.getIncomeExpenseTrend(userId, Math.min(monthCount, 12))
-  } else {
-    const m = months ?? 6
-    data = reportService.getIncomeExpenseTrend(userId, m)
-  }
+  const data = startDate && endDate
+    ? reportService.getIncomeExpenseTrendRange(userId, startDate, endDate)
+    : reportService.getIncomeExpenseTrend(userId, months ?? 6)
 
   return c.json({ data })
 })

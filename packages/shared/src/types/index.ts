@@ -295,6 +295,28 @@ export interface MonthComparison {
   expenseChangePercent: number | null
 }
 
+export interface ReportPeriodOverview {
+  current: MonthlyOverview
+  previous: (DateRange & { overview: MonthlyOverview }) | null
+  changes: {
+    incomePercent: number | null
+    expensePercent: number | null
+    savingsPercent: number | null
+  }
+}
+
+export interface ReportInsight {
+  kind: 'savings' | 'budget' | 'top_expense'
+  title: string
+  description: string
+  amount?: number
+  percentage?: number
+  categoryId?: string
+  date?: string
+}
+
+export type ReportTabId = 'overview' | 'categories' | 'trend' | 'budget' | 'assets' | 'annual'
+
 export interface CategoryExpense {
   categoryId: string
   categoryName: string
@@ -303,6 +325,8 @@ export interface CategoryExpense {
   totalAmount: number
   percentage: number
   transactionCount: number
+  previousAmount?: number
+  changePercent?: number | null
 }
 
 export interface TrendDataPoint {
@@ -310,6 +334,7 @@ export interface TrendDataPoint {
   totalIncome: number
   totalExpense: number
   averageExpense: number
+  savingsRate: number | null
 }
 
 export interface BudgetComparisonItem {

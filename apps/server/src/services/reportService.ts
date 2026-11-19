@@ -1,7 +1,7 @@
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../db'
 import { transactions, categories, userProfiles, budgets, categoryBudgets } from '../db/schema'
-import type { MonthlyOverview, MonthComparison, CategoryExpense, TrendDataPoint, BudgetComparisonItem, AnnualSummary, DateFilterPreset, DateRange } from '@pf/shared'
+import type { MonthlyOverview, MonthComparison, CategoryExpense, TrendDataPoint, BudgetComparisonItem, DateFilterPreset, DateRange, ReportInsight, ReportPeriodOverview } from '@pf/shared'
 import { getNetWorth, getNetWorthHistory } from './assetService'
 
 // Resolve authUserId → userProfile.id
@@ -62,10 +62,45 @@ export function parseDateRange(filter: DateFilterPreset | DateRange): DateRange 
 }
 
 export function getMonthRange(year: number, month: number): DateRange {
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const lastDay = new Date(year, month, 0).getDate()
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`
-  return { startDate, endDate }
+  const monthKey = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`
+  const end = new Date(0)
+  end.setUTCFullYear(year, month, 0)
+  return { startDate: `${monthKey}-01`, endDate: `${monthKey}-${end.getUTCDate()}` }
+}
+
+function isFullCalendarMonth(startDate: string, endDate: string): boolean {
+  const [year, month] = startDate.split('-').map(Number)
+  const monthRange = getMonthRange(year, month)
+  return startDate === monthRange.startDate && endDate === monthRange.endDate
+}
+
+function getPreviousRange(startDate: string, endDate: string): DateRange | null {
+  const start = new Date(`${startDate}T00:00:00Z`)
+  const end = new Date(`${endDate}T00:00:00Z`)
+  if (!(start <= end)) return null
+
+  const millisecondsPerDay = 86_400_000
+  const previousEnd = new Date(start.getTime() - millisecondsPerDay)
+  const previousStart = new Date(previousEnd)
+  const daysBetweenEndpoints = (end.getTime() - start.getTime()) / millisecondsPerDay
+  previousStart.setUTCDate(isFullCalendarMonth(startDate, endDate)
+    ? 1
+    : previousEnd.getUTCDate() - daysBetweenEndpoints)
+
+  if (previousStart.getUTCFullYear() < 1) return null
+  return {
+    startDate: previousStart.toISOString().slice(0, 10),
+    endDate: previousEnd.toISOString().slice(0, 10),
+  }
+}
+
+function getChangePercent(current: number, previous: number | undefined): number | null {
+  if (previous === undefined || previous === 0) return null
+  return Math.round(((current - previous) / Math.abs(previous)) * 1000) / 10
+}
+
+function getSavingsRate(totalIncome: number, totalExpense: number): number | null {
+  return totalIncome === 0 ? null : ((totalIncome - totalExpense) / totalIncome) * 100
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -73,9 +108,11 @@ export function getMonthRange(year: number, month: number): DateRange {
 // ═════════════════════════════════════════════════════════════════════════════
 
 export function getMonthlyOverview(authUserId: string, year: number, month: number): MonthlyOverview {
-  const profileId = getProfileId(authUserId)
   const { startDate, endDate } = getMonthRange(year, month)
+  return getOverviewForRange(getProfileId(authUserId), startDate, endDate)
+}
 
+function getOverviewForRange(profileId: string, startDate: string, endDate: string): MonthlyOverview {
   const where = and(
     eq(transactions.userId, profileId),
     gte(transactions.date, startDate),
@@ -110,25 +147,31 @@ export function getMonthlyOverview(authUserId: string, year: number, month: numb
 }
 
 export function getPreviousMonthComparison(authUserId: string, year: number, month: number): MonthComparison {
-  // Calculate previous month
-  let prevYear = year
-  let prevMonth = month - 1
-  if (prevMonth < 1) {
-    prevMonth = 12
-    prevYear -= 1
+  const { startDate, endDate } = getMonthRange(year, month)
+  const { changes } = getReportOverview(authUserId, startDate, endDate)
+  return {
+    incomeChangePercent: changes.incomePercent,
+    expenseChangePercent: changes.expensePercent,
   }
+}
 
-  const current = getMonthlyOverview(authUserId, year, month)
-  const previous = getMonthlyOverview(authUserId, prevYear, prevMonth)
-
-  const calcPercent = (curr: number, prev: number) => {
-    if (prev === 0) return null
-    return Math.round(((curr - prev) / prev) * 100 * 10) / 10
+export function getReportOverview(authUserId: string, startDate: string, endDate: string): ReportPeriodOverview {
+  const profileId = getProfileId(authUserId)
+  const current = getOverviewForRange(profileId, startDate, endDate)
+  const previousRange = getPreviousRange(startDate, endDate)
+  const previous = previousRange && {
+    ...previousRange,
+    overview: getOverviewForRange(profileId, previousRange.startDate, previousRange.endDate),
   }
 
   return {
-    incomeChangePercent: calcPercent(current.totalIncome, previous.totalIncome),
-    expenseChangePercent: calcPercent(current.totalExpense, previous.totalExpense),
+    current,
+    previous,
+    changes: {
+      incomePercent: getChangePercent(current.totalIncome, previous?.overview.totalIncome),
+      expensePercent: getChangePercent(current.totalExpense, previous?.overview.totalExpense),
+      savingsPercent: getChangePercent(current.difference, previous?.overview.difference),
+    },
   }
 }
 
@@ -136,10 +179,8 @@ export function getPreviousMonthComparison(authUserId: string, year: number, mon
 // US-RPT-02: Expenses by Category
 // ═════════════════════════════════════════════════════════════════════════════
 
-export function getExpensesByCategory(authUserId: string, startDate: string, endDate: string): CategoryExpense[] {
-  const profileId = getProfileId(authUserId)
-
-  const rows = db
+function getCategoryExpenseRows(profileId: string, startDate: string, endDate: string) {
+  return db
     .select({
       categoryId: transactions.categoryId,
       categoryName: categories.name,
@@ -161,19 +202,35 @@ export function getExpensesByCategory(authUserId: string, startDate: string, end
     .groupBy(transactions.categoryId, categories.id, categories.name, categories.icon, categories.color)
     .orderBy(desc(sql<number>`COALESCE(SUM(transactions.amount), 0)`))
     .all()
+}
 
-  // Calculate total for percentage
+export function getExpensesByCategory(authUserId: string, startDate: string, endDate: string): CategoryExpense[] {
+  const profileId = getProfileId(authUserId)
+  const rows = getCategoryExpenseRows(profileId, startDate, endDate)
+  const previousRange = getPreviousRange(startDate, endDate)
+  const previousAmounts = previousRange && new Map(
+    getCategoryExpenseRows(profileId, previousRange.startDate, previousRange.endDate)
+      .map((row) => [row.categoryId, row.totalAmount]),
+  )
+
   const totalExpense = rows.reduce((sum, r) => sum + r.totalAmount, 0)
 
-  return rows.map((r) => ({
-    categoryId: r.categoryId,
-    categoryName: r.categoryName ?? 'Không danh mục',
-    categoryIcon: r.categoryIcon,
-    categoryColor: r.categoryColor,
-    totalAmount: r.totalAmount,
-    percentage: totalExpense > 0 ? Math.round((r.totalAmount / totalExpense) * 1000) / 10 : 0,
-    transactionCount: r.transactionCount,
-  }))
+  return rows.map((row) => {
+    const previousAmount = previousAmounts?.get(row.categoryId) ?? 0
+    return {
+      categoryId: row.categoryId,
+      categoryName: row.categoryName ?? 'Không danh mục',
+      categoryIcon: row.categoryIcon,
+      categoryColor: row.categoryColor,
+      totalAmount: row.totalAmount,
+      percentage: totalExpense > 0 ? Math.round((row.totalAmount / totalExpense) * 1000) / 10 : 0,
+      transactionCount: row.transactionCount,
+      ...(previousAmounts && {
+        previousAmount,
+        changePercent: getChangePercent(row.totalAmount, previousAmount),
+      }),
+    }
+  })
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -181,41 +238,56 @@ export function getExpensesByCategory(authUserId: string, startDate: string, end
 // ═════════════════════════════════════════════════════════════════════════════
 
 export function getIncomeExpenseTrend(authUserId: string, months: number): TrendDataPoint[] {
-  const result: TrendDataPoint[] = []
+  if (months < 1) return []
   const today = new Date()
-  let currentYear = today.getFullYear()
-  let currentMonth = today.getMonth() + 1
+  const { endDate } = getMonthRange(today.getFullYear(), today.getMonth() + 1)
+  return getIncomeExpenseTrendRange(authUserId, getTrendStartDate(endDate, months), endDate)
+}
 
-  // Calculate start month
-  let startMonth = currentMonth - months + 1
-  let startYear = currentYear
-  if (startMonth < 1) {
-    startMonth += 12
-    startYear -= 1
-  }
+function getTrendStartDate(endDate: string, months: number): string {
+  const start = new Date(`${endDate.slice(0, 7)}-01T00:00:00Z`)
+  const availableMonths = (start.getUTCFullYear() - 1) * 12 + start.getUTCMonth() + 1
+  start.setUTCMonth(start.getUTCMonth() - Math.min(months, availableMonths) + 1)
+  return start.toISOString().slice(0, 10)
+}
 
-  // Loop through each month
-  for (let i = 0; i < months; i++) {
-    const month = startMonth + i
-    const year = month > 12 ? startYear + Math.floor((month - 1) / 12) : startYear
-    const m = ((month - 1) % 12) + 1
+export function getIncomeExpenseTrendRange(authUserId: string, startDate: string, endDate: string): TrendDataPoint[] {
+  const profileId = getProfileId(authUserId)
+  const monthKey = sql<string>`substr(${transactions.date}, 1, 7)`
+  const monthlyTotals = db
+    .select({
+      month: monthKey,
+      totalIncome: sql<number>`sum(case when ${transactions.type} = 'income' then ${transactions.amount} else 0 end)`,
+      totalExpense: sql<number>`sum(case when ${transactions.type} = 'expense' then ${transactions.amount} else 0 end)`,
+    })
+    .from(transactions)
+    .where(and(
+      eq(transactions.userId, profileId),
+      gte(transactions.date, startDate),
+      lte(transactions.date, endDate),
+    ))
+    .groupBy(monthKey)
+    .all()
+  const totalsByMonth = new Map(monthlyTotals.map((row) => [row.month, row]))
 
-    const overview = getMonthlyOverview(authUserId, year, m)
-
-    result.push({
-      month: `${year}-${String(m).padStart(2, '0')}`,
-      totalIncome: overview.totalIncome,
-      totalExpense: overview.totalExpense,
-      averageExpense: 0, // Will be calculated after loop
+  const points: TrendDataPoint[] = []
+  const monthStart = new Date(`${startDate.slice(0, 7)}-01T00:00:00Z`)
+  const end = new Date(`${endDate}T00:00:00Z`)
+  for (; monthStart <= end; monthStart.setUTCMonth(monthStart.getUTCMonth() + 1)) {
+    const month = monthStart.toISOString().slice(0, 7)
+    const { totalIncome = 0, totalExpense = 0 } = totalsByMonth.get(month) ?? {}
+    points.push({
+      month,
+      totalIncome,
+      totalExpense,
+      averageExpense: 0,
+      savingsRate: getSavingsRate(totalIncome, totalExpense),
     })
   }
 
-  // Calculate average expense
-  const avgExpense = result.length > 0
-    ? Math.round(result.reduce((sum, r) => sum + r.totalExpense, 0) / result.length)
-    : 0
-
-  return result.map((r) => ({ ...r, averageExpense: avgExpense }))
+  if (!points.length) return points
+  const averageExpense = Math.round(points.reduce((sum, point) => sum + point.totalExpense, 0) / points.length)
+  return points.map((point) => ({ ...point, averageExpense }))
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -243,7 +315,7 @@ export function getBudgetVsActual(authUserId: string, year: number, month: numbe
 
   // Get actual expenses by category
   const { startDate, endDate } = getMonthRange(year, month)
-  const expenses = getExpensesByCategory(authUserId, startDate, endDate)
+  const expenses = getCategoryExpenseRows(profileId, startDate, endDate)
   const expenseMap = new Map(expenses.map((e) => [e.categoryId, e]))
 
   // Build result
@@ -326,6 +398,63 @@ export function getTopExpenses(authUserId: string, startDate: string, endDate: s
     .orderBy(desc(transactions.amount))
     .limit(limit)
     .all()
+}
+
+export function getReportInsights(authUserId: string, startDate: string, endDate: string): ReportInsight[] {
+  const insights: ReportInsight[] = []
+  const profileId = getProfileId(authUserId)
+  const current = getOverviewForRange(profileId, startDate, endDate)
+  const savingsRate = getSavingsRate(current.totalIncome, current.totalExpense)
+
+  if (savingsRate !== null) {
+    const trend = getIncomeExpenseTrendRange(authUserId, getTrendStartDate(endDate, 6), endDate)
+    const monthlyRates = trend.flatMap(({ savingsRate }) => savingsRate === null ? [] : [savingsRate])
+    const averageRate = monthlyRates.length
+      ? monthlyRates.reduce((sum, rate) => sum + rate, 0) / monthlyRates.length
+      : null
+    insights.push({
+      kind: 'savings',
+      title: 'Tỷ lệ tiết kiệm',
+      description: averageRate === null
+        ? 'Tỷ lệ tiết kiệm trong kỳ đã chọn.'
+        : `Tỷ lệ tiết kiệm trung bình trong 6 tháng đến cuối kỳ là ${averageRate.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%.`,
+      amount: current.difference,
+      percentage: savingsRate,
+    })
+  }
+
+  if (isFullCalendarMonth(startDate, endDate)) {
+    const [year, month] = startDate.split('-').map(Number)
+    const [budget] = getBudgetVsActual(authUserId, year, month)
+      .sort((a, b) => b.actualAmount / b.budgetAmount - a.actualAmount / a.budgetAmount)
+    if (budget) {
+      const overBudget = budget.actualAmount > budget.budgetAmount
+      insights.push({
+        kind: 'budget',
+        title: overBudget ? 'Vượt ngân sách' : 'Tiến độ ngân sách',
+        description: `Chi tiêu cho ${budget.categoryName} ${overBudget ? 'đã vượt' : 'đang trong'} hạn mức tháng.`,
+        amount: budget.actualAmount,
+        percentage: budget.percentage,
+        categoryId: budget.categoryId,
+      })
+    }
+  }
+
+  if (current.expenseCount > 0) {
+    const [expense] = getTopExpenses(authUserId, startDate, endDate, 1)
+    if (expense) {
+      insights.push({
+        kind: 'top_expense',
+        title: 'Khoản chi lớn nhất',
+        description: expense.note?.trim() || expense.category?.name || 'Không danh mục',
+        amount: expense.amount,
+        categoryId: expense.categoryId,
+        date: expense.date,
+      })
+    }
+  }
+
+  return insights
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
