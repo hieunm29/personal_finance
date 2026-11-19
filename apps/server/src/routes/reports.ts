@@ -25,6 +25,17 @@ const overviewQuery = z.union([
   }),
 ])
 
+const maxTrendMonths = 12
+const trendQuery = optionalReportDateRangeQuery.extend({
+  months: z.string().transform(Number).pipe(z.number().int().nonnegative()).optional(),
+}).refine(isOrderedDateRange, dateRangeMessage).refine(({ startDate, endDate }) => {
+  if (!startDate || !endDate) return true
+  const [startYear, startMonth] = startDate.split('-').map(Number)
+  const [endYear, endMonth] = endDate.split('-').map(Number)
+  const monthCount = (endYear - startYear) * 12 + endMonth - startMonth + 1
+  return monthCount <= maxTrendMonths
+}, `The trend date range can span at most ${maxTrendMonths} calendar months`)
+
 // US-RPT-01: Monthly Overview
 app.get('/overview', zValidator('query', overviewQuery), async (c) => {
   const query = c.req.valid('query')
@@ -85,9 +96,7 @@ app.get('/categories/:categoryId/transactions', zValidator('query', z.object({
 })
 
 // US-RPT-03: Income/Expense Trend
-app.get('/trend', zValidator('query', optionalReportDateRangeQuery.extend({
-  months: z.string().transform(Number).pipe(z.number().int().nonnegative()).optional(),
-}).refine(isOrderedDateRange, dateRangeMessage)), async (c) => {
+app.get('/trend', zValidator('query', trendQuery), async (c) => {
   const { months, startDate, endDate } = c.req.valid('query')
   const userId = c.get('userId')
 

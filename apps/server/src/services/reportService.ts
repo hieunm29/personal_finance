@@ -295,8 +295,11 @@ export function getIncomeExpenseTrendRange(authUserId: string, startDate: string
 // ═════════════════════════════════════════════════════════════════════════════
 
 export function getBudgetVsActual(authUserId: string, year: number, month: number): BudgetComparisonItem[] {
-  const profileId = getProfileId(authUserId)
-  const monthStr = `${year}-${String(month).padStart(2, '0')}`
+  return getBudgetComparisonForRange(getProfileId(authUserId), getMonthRange(year, month))
+}
+
+function getBudgetComparisonForRange(profileId: string, { startDate, endDate }: DateRange): BudgetComparisonItem[] {
+  const monthStr = startDate.slice(0, 7)
 
   // Get budgets for this month
   const budgetRows = db
@@ -314,7 +317,6 @@ export function getBudgetVsActual(authUserId: string, year: number, month: numbe
     .all()
 
   // Get actual expenses by category
-  const { startDate, endDate } = getMonthRange(year, month)
   const expenses = getCategoryExpenseRows(profileId, startDate, endDate)
   const expenseMap = new Map(expenses.map((e) => [e.categoryId, e]))
 
@@ -423,16 +425,15 @@ export function getReportInsights(authUserId: string, startDate: string, endDate
     })
   }
 
-  if (isFullCalendarMonth(startDate, endDate)) {
-    const [year, month] = startDate.split('-').map(Number)
-    const [budget] = getBudgetVsActual(authUserId, year, month)
+  if (startDate.slice(0, 7) === endDate.slice(0, 7)) {
+    const [budget] = getBudgetComparisonForRange(profileId, { startDate, endDate })
       .sort((a, b) => b.actualAmount / b.budgetAmount - a.actualAmount / a.budgetAmount)
     if (budget) {
       const overBudget = budget.actualAmount > budget.budgetAmount
       insights.push({
         kind: 'budget',
         title: overBudget ? 'Vượt ngân sách' : 'Tiến độ ngân sách',
-        description: `Chi tiêu cho ${budget.categoryName} ${overBudget ? 'đã vượt' : 'đang trong'} hạn mức tháng.`,
+        description: `Chi tiêu trong kỳ cho ${budget.categoryName} ${overBudget ? 'đã vượt' : 'đang trong'} hạn mức tháng.`,
         amount: budget.actualAmount,
         percentage: budget.percentage,
         categoryId: budget.categoryId,
