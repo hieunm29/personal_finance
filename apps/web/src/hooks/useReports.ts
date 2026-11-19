@@ -22,8 +22,9 @@ type ExportReportParams = {
   assetHistoryPeriod: '6' | '12' | 'all'
 }
 
-export function useReportOverview(startDate: string, endDate: string) {
+export function useReportOverview(startDate: string, endDate: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['reports', 'overview', startDate, endDate],
     queryFn: ({ signal }) => {
       const query = new URLSearchParams({ startDate, endDate })
@@ -32,8 +33,9 @@ export function useReportOverview(startDate: string, endDate: string) {
   })
 }
 
-export function useReportInsights(startDate: string, endDate: string) {
+export function useReportInsights(startDate: string, endDate: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['reports', 'insights', startDate, endDate],
     queryFn: ({ signal }) => {
       const query = new URLSearchParams({ startDate, endDate })
@@ -80,13 +82,14 @@ export function useMonthlyOverview(year: number, month: number) {
 }
 
 // US-RPT-02: Expenses by Category
-export function useExpensesByCategory(startDate?: string, endDate?: string) {
+export function useExpensesByCategory(startDate?: string, endDate?: string, enabled = true) {
   const params = new URLSearchParams()
   if (startDate) params.set('startDate', startDate)
   if (endDate) params.set('endDate', endDate)
   const query = params.toString() ? `?${params.toString()}` : ''
 
   return useQuery({
+    enabled,
     queryKey: ['reports', 'categories', startDate, endDate],
     queryFn: () =>
       apiClient<{ data: CategoryExpense[] }>(`/reports/categories${query}`).then(res => res.data),
@@ -108,7 +111,7 @@ export function useTransactionsByCategory(categoryId: string, startDate?: string
 }
 
 // US-RPT-03: Income/Expense Trend
-export function useIncomeExpenseTrend(months?: number, startDate?: string, endDate?: string) {
+export function useIncomeExpenseTrend(months?: number, startDate?: string, endDate?: string, enabled = true) {
   const params = new URLSearchParams()
   if (months) params.set('months', String(months))
   if (startDate) params.set('startDate', startDate)
@@ -116,6 +119,7 @@ export function useIncomeExpenseTrend(months?: number, startDate?: string, endDa
   const query = params.toString() ? `?${params.toString()}` : ''
 
   return useQuery({
+    enabled,
     queryKey: ['reports', 'trend', months, startDate, endDate],
     queryFn: () =>
       apiClient<{ data: TrendDataPoint[] }>(`/reports/trend${query}`).then(res => res.data),
@@ -123,8 +127,9 @@ export function useIncomeExpenseTrend(months?: number, startDate?: string, endDa
 }
 
 // US-RPT-04: Budget vs Actual
-export function useBudgetVsActual(year: number, month: number) {
+export function useBudgetVsActual(year: number, month: number, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['reports', 'budgetComparison', year, month],
     queryFn: () =>
       apiClient<{ data: BudgetComparisonItem[] }>(
@@ -134,8 +139,9 @@ export function useBudgetVsActual(year: number, month: number) {
 }
 
 // US-RPT-05: Net Worth History
-export function useNetWorthHistory(limit?: number) {
+export function useNetWorthHistory(limit?: number, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['reports', 'networthHistory', limit],
     queryFn: () => {
       const query = limit ? `?limit=${limit}` : ''
@@ -145,8 +151,9 @@ export function useNetWorthHistory(limit?: number) {
 }
 
 // US-RPT-06: Asset Allocation
-export function useAssetAllocation() {
+export function useAssetAllocation(enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['reports', 'assetAllocation'],
     queryFn: () =>
       apiClient<{ data: AssetAllocationItem[] }>('/reports/asset-allocation').then(res => res.data),
@@ -154,12 +161,13 @@ export function useAssetAllocation() {
 }
 
 // US-RPT-07: Top Expenses
-export function useTopExpenses(startDate?: string, endDate?: string, limit = 10) {
+export function useTopExpenses(startDate?: string, endDate?: string, limit = 10, enabled = true) {
   const params = new URLSearchParams({ limit: String(limit) })
   if (startDate) params.set('startDate', startDate)
   if (endDate) params.set('endDate', endDate)
 
   return useQuery({
+    enabled,
     queryKey: ['reports', 'topExpenses', startDate, endDate, limit],
     queryFn: () =>
       apiClient<{ data: Transaction[] }>(`/reports/top-expenses?${params.toString()}`).then(res => res.data),
@@ -167,8 +175,9 @@ export function useTopExpenses(startDate?: string, endDate?: string, limit = 10)
 }
 
 // US-RPT-08: Annual Summary
-export function useAnnualSummary(year: number) {
+export function useAnnualSummary(year: number, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['reports', 'annual', year],
     queryFn: () =>
       apiClient<{ data: AnnualSummary }>(`/reports/annual?year=${year}`).then(res => res.data),

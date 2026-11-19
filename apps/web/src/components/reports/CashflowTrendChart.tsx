@@ -10,6 +10,10 @@ ChartJS.register(BarController, LineController)
 const compactAmount = new Intl.NumberFormat('vi-VN', { notation: 'compact', maximumFractionDigits: 1 })
 const rate = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 })
 
+function formatRate(value: number) {
+  return `${rate.format(value)}%`
+}
+
 const options: ChartOptions<'bar' | 'line'> = {
   responsive: true,
   maintainAspectRatio: false,
@@ -23,7 +27,7 @@ const options: ChartOptions<'bar' | 'line'> = {
           const value = parsed.y
           if (value === null) return ''
           return dataset.yAxisID === 'rate'
-            ? `${dataset.label}: ${rate.format(value)}%`
+            ? `${dataset.label}: ${formatRate(value)}`
             : `${dataset.label}: ${formatCurrency(value)}`
         },
       },
@@ -43,7 +47,7 @@ const options: ChartOptions<'bar' | 'line'> = {
       position: 'right',
       beginAtZero: true,
       grid: { drawOnChartArea: false },
-      ticks: { color: '#64748b', maxTicksLimit: 5, callback: (value) => `${rate.format(Number(value))}%` },
+      ticks: { color: '#64748b', maxTicksLimit: 5, callback: (value) => formatRate(Number(value)) },
     },
   },
 }
@@ -89,14 +93,42 @@ export default function CashflowTrendChart({ data }: { data: TrendDataPoint[] })
   }
 
   return (
-    <div className="reports-cashflow-chart">
-      <Chart
-        type="bar"
-        data={chartData}
-        options={options}
-        role="img"
-        aria-label="Tổng thu, tổng chi và tỷ lệ tiết kiệm theo tháng"
-      />
-    </div>
+    <>
+      <div className="reports-cashflow-chart">
+        <Chart
+          type="bar"
+          data={chartData}
+          options={options}
+          role="img"
+          aria-label="Tổng thu, tổng chi và tỷ lệ tiết kiệm theo tháng"
+        />
+      </div>
+      <details className="reports-chart-data reports-print-hide">
+        <summary>Xem số liệu theo tháng</summary>
+        <table className="report-table">
+          <caption className="sr-only">Dòng tiền theo tháng</caption>
+          <thead>
+            <tr>
+              <th scope="col">Tháng</th>
+              <th scope="col" className="report-table__align-right">Thu</th>
+              <th scope="col" className="report-table__align-right">Chi</th>
+              <th scope="col" className="report-table__align-right">Tỷ lệ tiết kiệm</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(({ month, totalIncome, totalExpense, savingsRate }) => (
+              <tr key={month}>
+                <th scope="row">{month.slice(5)}/{month.slice(0, 4)}</th>
+                <td className="report-table__align-right">{formatCurrency(totalIncome)}</td>
+                <td className="report-table__align-right">{formatCurrency(totalExpense)}</td>
+                <td className="report-table__align-right">
+                  {savingsRate === null ? 'Không có' : formatRate(savingsRate)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </>
   )
 }

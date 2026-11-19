@@ -1,5 +1,7 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { MonthlyOverview, ReportInsight, ReportPeriodOverview, ReportTabId } from '@pf/shared'
+import { useNavigate } from 'react-router'
 import {
   useAnnualSummary,
   useAssetAllocation,
@@ -12,6 +14,7 @@ import {
   useReportOverview,
   useTopExpenses,
 } from '../hooks/useReports'
+import { authClient } from '../lib/auth-client'
 import { formatCurrency, formatDate } from '../utils/format'
 import AnnualBarChart from '../components/reports/AnnualBarChart'
 import AssetAllocationChart from '../components/reports/AssetAllocationChart'
@@ -280,12 +283,21 @@ function InsightCards({ insights }: { insights: ReportInsight[] }) {
   )
 }
 
-function OverviewTab({ period, onViewCategories }: { period: ReportPeriod; onViewCategories: () => void }) {
-  const { startDate, endDate } = period
-  const historyStart = shiftMonthStart(endDate, -5) ?? '0001-01-01'
-  const overview = useReportOverview(startDate, endDate)
-  const trend = useIncomeExpenseTrend(undefined, historyStart, endDate)
-  const insights = useReportInsights(startDate, endDate)
+function OverviewTab({
+  historyStart,
+  endDate,
+  overview,
+  trend,
+  insights,
+  onViewCategories,
+}: {
+  historyStart: string
+  endDate: string
+  overview: ReturnType<typeof useReportOverview>
+  trend: ReturnType<typeof useIncomeExpenseTrend>
+  insights: ReturnType<typeof useReportInsights>
+  onViewCategories: () => void
+}) {
   const hasTrendActivity = trend.data?.some(({ totalIncome, totalExpense }) => totalIncome !== 0 || totalExpense !== 0)
 
   return (
@@ -326,9 +338,15 @@ function OverviewTab({ period, onViewCategories }: { period: ReportPeriod; onVie
   )
 }
 
-function CategoriesTab({ period }: { period: ReportPeriod }) {
+function CategoriesTab({
+  period,
+  query,
+}: {
+  period: ReportPeriod
+  query: ReturnType<typeof useExpensesByCategory>
+}) {
   const { startDate, endDate } = period
-  const { data: categories, isLoading, isError } = useExpensesByCategory(startDate, endDate)
+  const { data: categories, isLoading, isError } = query
   const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string } | null>(null)
 
   if (isLoading) return <ReportStatus message="Đang tải danh mục…" />
@@ -413,10 +431,13 @@ function CategoriesTab({ period }: { period: ReportPeriod }) {
   )
 }
 
-function TrendTab({ period }: { period: ReportPeriod }) {
-  const { startDate, endDate } = period
-  const trend = useIncomeExpenseTrend(undefined, startDate, endDate)
-  const topExpenses = useTopExpenses(startDate, endDate, 10)
+function TrendTab({
+  trend,
+  topExpenses,
+}: {
+  trend: ReturnType<typeof useIncomeExpenseTrend>
+  topExpenses: ReturnType<typeof useTopExpenses>
+}) {
   const hasTrendActivity = trend.data?.some(({ totalIncome, totalExpense }) => totalIncome !== 0 || totalExpense !== 0)
 
   return (
@@ -442,8 +463,16 @@ function TrendTab({ period }: { period: ReportPeriod }) {
   )
 }
 
-function BudgetTab({ year, month }: { year: number; month: number }) {
-  const { data, isLoading, isError } = useBudgetVsActual(year, month)
+function BudgetTab({
+  year,
+  month,
+  query,
+}: {
+  year: number
+  month: number
+  query: ReturnType<typeof useBudgetVsActual>
+}) {
+  const { data, isLoading, isError } = query
 
   return (
     <ReportCard title="Ngân sách so với thực tế" subtitle={`Tháng ${month}/${year}`}>
@@ -455,16 +484,16 @@ function BudgetTab({ year, month }: { year: number; month: number }) {
 }
 
 function AssetsTab({
+  allocation,
+  history,
   assetHistoryPeriod,
   onPeriodChange,
 }: {
+  allocation: ReturnType<typeof useAssetAllocation>
+  history: ReturnType<typeof useNetWorthHistory>
   assetHistoryPeriod: AssetHistoryPeriod
   onPeriodChange: (period: AssetHistoryPeriod) => void
 }) {
-  const allocation = useAssetAllocation()
-  const limit = assetHistoryPeriod === 'all' ? undefined : Number(assetHistoryPeriod)
-  const history = useNetWorthHistory(limit)
-
   return (
     <div className="report-section">
       <div className="report-grid">
@@ -504,8 +533,8 @@ function AssetsTab({
   )
 }
 
-function AnnualTab({ year }: { year: number }) {
-  const { data, isLoading } = useAnnualSummary(year)
+function AnnualTab({ year, query }: { year: number; query: ReturnType<typeof useAnnualSummary> }) {
+  const { data, isLoading } = query
 
   if (isLoading) return <ReportStatus message="Đang tải báo cáo năm…" />
   if (!data) return <ReportStatus message="Không thể tải báo cáo năm." error />
@@ -674,18 +703,51 @@ function ReportTabs({ activeTab, onChange }: { activeTab: ReportTabId; onChange:
 }
 
 export default function ReportsPage() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<ReportTabId>('overview')
   const [period, setPeriod] = useState(() => getPresetPeriod('this_month'))
   const [assetHistoryPeriod, setAssetHistoryPeriod] = useState<AssetHistoryPeriod>('12')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const exportReport = useExportReport()
   const exportMenu = useRef<HTMLDetailsElement>(null)
-  const [year, month] = period.endDate.split('-').map(Number)
+  const { startDate, endDate } = period
+  const [year, month] = endDate.split('-').map(Number)
   const today = localToday()
   const previousMonth = shiftMonthStart(period.endDate, -1)
   const nextMonth = shiftMonthStart(period.endDate, 1)
-  const canUseTrend = getMonthCount(period.startDate, period.endDate) <= MAX_TREND_MONTHS
+  const canUseTrend = getMonthCount(startDate, endDate) <= MAX_TREND_MONTHS
   const activeLabel = TABS.find(({ id }) => id === activeTab)?.label
+  const historyStart = shiftMonthStart(endDate, -5) ?? '0001-01-01'
+  const overviewActive = activeTab === 'overview'
+  const trendActive = activeTab === 'trend' && canUseTrend
+  const assetsActive = activeTab === 'assets'
+  const historyLimit = assetHistoryPeriod === 'all' ? undefined : Number(assetHistoryPeriod)
+
+  const overview = useReportOverview(startDate, endDate, overviewActive)
+  const insights = useReportInsights(startDate, endDate, overviewActive)
+  const trend = useIncomeExpenseTrend(undefined, overviewActive ? historyStart : startDate, endDate, overviewActive || trendActive)
+  const categories = useExpensesByCategory(startDate, endDate, activeTab === 'categories')
+  const topExpenses = useTopExpenses(startDate, endDate, 10, trendActive)
+  const budget = useBudgetVsActual(year, month, activeTab === 'budget')
+  const allocation = useAssetAllocation(assetsActive)
+  const history = useNetWorthHistory(historyLimit, assetsActive)
+  const annual = useAnnualSummary(year, activeTab === 'annual')
+
+  const canPrint = {
+    overview: overview.isSuccess && trend.isSuccess && insights.isSuccess,
+    categories: categories.isSuccess,
+    trend: canUseTrend && trend.isSuccess && topExpenses.isSuccess,
+    budget: budget.isSuccess,
+    assets: allocation.isSuccess && history.isSuccess,
+    annual: annual.isSuccess,
+  }[activeTab]
+
+  async function signOut() {
+    await authClient.signOut()
+    queryClient.clear()
+    navigate('/login')
+  }
 
   function navigateMonth(startDate: string | null) {
     if (startDate) setPeriod(getNavigatedPeriod(startDate, today))
@@ -707,6 +769,7 @@ export default function ReportsPage() {
   }
 
   function printReport() {
+    if (!canPrint) return
     closeExportMenu(true)
     window.print()
   }
@@ -758,9 +821,12 @@ export default function ReportsPage() {
               <button type="button" onClick={exportCsv} disabled={exportReport.isPending || (activeTab === 'trend' && !canUseTrend)}>
                 Tải xuống CSV
               </button>
-              <button type="button" onClick={printReport}>In / Lưu PDF</button>
+              <button type="button" onClick={printReport} disabled={!canPrint}>In / Lưu PDF</button>
             </div>
           </details>
+          <button type="button" className="reports-sign-out" onClick={signOut} aria-label="Đăng xuất" title="Đăng xuất">
+            <ReportIcon path="M10 4H4v16h6m0-8h11m-4-4 4 4-4 4" />
+          </button>
         </div>
       </header>
 
@@ -775,17 +841,33 @@ export default function ReportsPage() {
       <p className="reports-printed-tab">{activeLabel}</p>
 
       <div id="report-panel" role="tabpanel" aria-labelledby={`report-tab-${activeTab}`} tabIndex={0}>
-        {activeTab === 'overview' ? <OverviewTab period={period} onViewCategories={() => setActiveTab('categories')} /> : null}
+        {activeTab === 'overview' ? (
+          <OverviewTab
+            historyStart={historyStart}
+            endDate={endDate}
+            overview={overview}
+            trend={trend}
+            insights={insights}
+            onViewCategories={() => setActiveTab('categories')}
+          />
+        ) : null}
         {activeTab === 'categories' ? (
-          <CategoriesTab key={`${period.startDate}:${period.endDate}`} period={period} />
+          <CategoriesTab key={`${startDate}:${endDate}`} period={period} query={categories} />
         ) : null}
         {activeTab === 'trend' ? canUseTrend
-          ? <TrendTab period={period} />
+          ? <TrendTab trend={trend} topExpenses={topExpenses} />
           : <ReportStatus message="Chọn một kỳ tối đa 12 tháng để xem và xuất báo cáo xu hướng." />
           : null}
-        {activeTab === 'budget' ? <BudgetTab year={year} month={month} /> : null}
-        {activeTab === 'assets' ? <AssetsTab assetHistoryPeriod={assetHistoryPeriod} onPeriodChange={setAssetHistoryPeriod} /> : null}
-        {activeTab === 'annual' ? <AnnualTab year={year} /> : null}
+        {activeTab === 'budget' ? <BudgetTab year={year} month={month} query={budget} /> : null}
+        {activeTab === 'assets' ? (
+          <AssetsTab
+            allocation={allocation}
+            history={history}
+            assetHistoryPeriod={assetHistoryPeriod}
+            onPeriodChange={setAssetHistoryPeriod}
+          />
+        ) : null}
+        {activeTab === 'annual' ? <AnnualTab year={year} query={annual} /> : null}
       </div>
     </div>
   )

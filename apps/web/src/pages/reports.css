@@ -97,8 +97,21 @@ main:has(> .finance-reports) {
   display: none;
 }
 
+.reports-sign-out {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  height: 40px;
+  border: 1px solid var(--reports-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--reports-muted);
+  cursor: pointer;
+}
+
 .reports-month-nav button:hover:not(:disabled),
-.reports-mobile-nav:hover {
+.reports-mobile-nav:hover,
+.reports-sign-out:hover {
   background: #eef2ff;
 }
 
@@ -403,6 +416,30 @@ main:has(> .finance-reports) {
   height: clamp(190px, 18vw, 275px);
 }
 
+.reports-chart-data {
+  margin-top: 12px;
+}
+
+.reports-chart-data summary {
+  width: fit-content;
+  padding: 4px 0;
+  color: var(--reports-brand);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.reports-chart-data table {
+  margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-chart-data tbody th {
+  color: var(--reports-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
 .reports-chart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -595,6 +632,7 @@ main:has(> .finance-reports) {
 
   .reports-month-nav {
     flex: 1;
+    gap: 4px;
   }
 
   .reports-export-menu summary span {
