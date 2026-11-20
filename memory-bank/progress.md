@@ -190,7 +190,8 @@
 - [x] `src/channels/zalo/`: webhook `/webhooks/zalo` (secret header, dedupe, queue theo user), linking `/link CODE`, zaloClient
 - [x] `/api/integrations/zalo/{link-code,status}` + DELETE
 - [x] Scripts `bun run ai:chat`, `bun run zalo:webhook`; test `src/ai/aiAssistant.test.ts` (không gọi Claude thật)
-- [ ] Chưa chạy thử với Claude/Zalo thật; chưa có UI liên kết Zalo trên web
+- [x] Trí nhớ dài hạn (2026-11-20): `ai_user_facts` + `remember_fact`/`forget_fact`, chèn vào system prompt
+- [ ] Chưa chạy thử với Zalo thật; chưa có UI liên kết Zalo trên web
 
 ## 🔲 Còn Lại — Phase 2
 

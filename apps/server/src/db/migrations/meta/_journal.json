@@ -29,6 +29,13 @@
       "when": 1795101923098,
       "tag": "0003_ai_zalo_assistant",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795162494126,
+      "tag": "0004_ai_user_facts",
+      "breakpoints": true
     }
   ]
 }

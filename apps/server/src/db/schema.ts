@@ -223,6 +223,17 @@ export const aiActions = sqliteTable('ai_actions', {
   createdAt: createdAt(),
 })
 
+/**
+ * Trí nhớ DÀI HẠN: các điều người dùng dặn bot ghi nhớ ("cà phê luôn ghi vào ví Momo").
+ * Không bị cắt theo số tin nhắn như ai_messages, và không bị /reset xóa.
+ */
+export const aiUserFacts = sqliteTable('ai_user_facts', {
+  id: id(),
+  userId: text('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  createdAt: createdAt(),
+})
+
 /** Chống xử lý trùng khi Zalo gửi lại cùng một webhook. */
 export const zaloProcessedMessages = sqliteTable('zalo_processed_messages', {
   messageId: text('message_id').primaryKey(),

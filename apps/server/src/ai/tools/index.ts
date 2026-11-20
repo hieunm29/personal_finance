@@ -1,4 +1,5 @@
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool'
+import { buildMemoryTools } from './memoryTools'
 import { buildReportTools } from './reportTools'
 import { buildTransactionTools } from './transactionTools'
 
@@ -6,7 +7,7 @@ import { buildTransactionTools } from './transactionTools'
 export interface ToolCallRecord {
   name: string
   ok: boolean
-  /** Với create_transaction: id giao dịch đã tạo. */
+  /** Với create_transaction: id giao dịch đã tạo; với remember_fact: id điều đã nhớ. */
   refId?: string
 }
 
@@ -23,8 +24,9 @@ export interface ToolContext {
 function extractRefId(result: unknown): string | undefined {
   if (typeof result !== 'string') return undefined
   try {
-    const parsed = JSON.parse(result) as { transactionId?: unknown }
-    return typeof parsed.transactionId === 'string' ? parsed.transactionId : undefined
+    const parsed = JSON.parse(result) as { transactionId?: unknown; factId?: unknown }
+    const id = parsed.transactionId ?? parsed.factId
+    return typeof id === 'string' ? id : undefined
   } catch {
     return undefined
   }
@@ -59,5 +61,5 @@ function withCallLog<T extends BetaRunnableTool<any>>(tool: T, log: ToolCallReco
  * Thứ tự tool phải cố định, vì đổi thứ tự cũng làm hỏng cache.
  */
 export function buildTools(ctx: ToolContext) {
-  return [...buildTransactionTools(ctx), ...buildReportTools(ctx)].map((tool) => withCallLog(tool, ctx.callLog))
+  return [...buildTransactionTools(ctx), ...buildReportTools(ctx), ...buildMemoryTools(ctx)].map((tool) => withCallLog(tool, ctx.callLog))
 }

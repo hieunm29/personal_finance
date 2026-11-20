@@ -1,8 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { aiConfig } from './config'
 import { getAnthropicClient } from './client'
-import { loadHistory, saveTurn } from './memory'
-import { BASE_SYSTEM_PROMPT, buildUserContextPrompt, withDateHeader } from './prompts/systemPrompt'
+import { loadFacts, loadHistory, saveTurn } from './memory'
+import { BASE_SYSTEM_PROMPT, buildFactsPrompt, buildUserContextPrompt, withDateHeader } from './prompts/systemPrompt'
 import { checkReply, finalizeReply, buildActionNote, stripActionNotes } from './guard'
 import { buildTools, type ToolCallRecord } from './tools'
 import { todayVN } from './tools/helpers'
@@ -18,7 +18,7 @@ export interface AgentInput {
  * Trái tim của trợ lý: nhận 1 tin nhắn, trả về 1 câu trả lời.
  *
  * Luồng xử lý:
- *  1. Dựng system prompt = phần cố định + danh mục/ví của user
+ *  1. Dựng system prompt = phần cố định + danh mục/ví của user + điều đã nhớ (trí nhớ dài hạn)
  *  2. Ghép lịch sử chat + tin nhắn mới (gắn ngày hôm nay)
  *  3. Tool Runner gọi Claude; nếu Claude muốn dùng tool, runner chạy `run` của tool,
  *     gửi kết quả lại và gọi Claude tiếp — lặp đến khi Claude trả lời bằng văn bản
@@ -36,7 +36,12 @@ export async function runAgent({ authUserId, text, channel = 'zalo' }: AgentInpu
   const system: Anthropic.Beta.BetaTextBlockParam[] = [
     // cache_control đánh dấu "điểm cắt" cho prompt cache: mọi thứ TỪ ĐẦU đến đây được cache.
     { type: 'text', text: BASE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-    { type: 'text', text: buildUserContextPrompt(userContext), cache_control: { type: 'ephemeral' } },
+    // Danh mục/ví + điều đã nhớ: theo từng user, ít thay đổi → vẫn cache được.
+    {
+      type: 'text',
+      text: `${buildUserContextPrompt(userContext)}\n\n${buildFactsPrompt(loadFacts(profileId))}`,
+      cache_control: { type: 'ephemeral' },
+    },
   ]
 
   const messages: Anthropic.Beta.BetaMessageParam[] = [

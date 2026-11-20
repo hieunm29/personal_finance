@@ -1,10 +1,10 @@
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import type Anthropic from '@anthropic-ai/sdk'
 import { db } from '../db'
-import { aiMessages } from '../db/schema'
+import { aiMessages, aiUserFacts } from '../db/schema'
 
 /**
- * "Trí nhớ" ngắn hạn của chatbot.
+ * "Trí nhớ" NGẮN HẠN của chatbot (lịch sử hội thoại). Trí nhớ dài hạn ở cuối file.
  *
  * API Claude là stateless: mỗi lần gọi, model chỉ biết những gì ta gửi lên.
  * Để bot hiểu "còn tháng trước thì sao?" ta lưu từng lượt chat vào DB và gửi lại
@@ -35,4 +35,42 @@ export function saveTurn(profileId: string, userText: string, assistantText: str
 
 export function clearHistory(profileId: string): void {
   db.delete(aiMessages).where(eq(aiMessages.userId, profileId)).run()
+}
+
+// ═══════════════════════════════════════════════════════════
+// Trí nhớ DÀI HẠN — những điều người dùng dặn "nhớ là…"
+// ═══════════════════════════════════════════════════════════
+
+/** Giới hạn để phần "điều cần nhớ" trong system prompt luôn nhỏ gọn. */
+export const MAX_FACTS_PER_USER = 50
+export const MAX_FACT_LENGTH = 300
+
+export interface UserFact {
+  id: string
+  content: string
+}
+
+export function loadFacts(profileId: string): UserFact[] {
+  return db.select({ id: aiUserFacts.id, content: aiUserFacts.content })
+    .from(aiUserFacts)
+    .where(eq(aiUserFacts.userId, profileId))
+    .orderBy(sql`rowid`)
+    .all()
+}
+
+export function countFacts(profileId: string): number {
+  return db.select({ count: sql<number>`count(*)` }).from(aiUserFacts)
+    .where(eq(aiUserFacts.userId, profileId)).get()?.count ?? 0
+}
+
+export function addFact(profileId: string, content: string): UserFact {
+  return db.insert(aiUserFacts).values({ userId: profileId, content })
+    .returning({ id: aiUserFacts.id, content: aiUserFacts.content }).get()
+}
+
+/** Xóa 1 điều đã nhớ — luôn lọc theo userId để không xóa nhầm của người khác. */
+export function deleteFact(profileId: string, factId: string): UserFact | null {
+  return db.delete(aiUserFacts)
+    .where(and(eq(aiUserFacts.userId, profileId), eq(aiUserFacts.id, factId)))
+    .returning({ id: aiUserFacts.id, content: aiUserFacts.content }).get() ?? null
 }

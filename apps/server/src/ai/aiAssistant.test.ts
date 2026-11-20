@@ -135,6 +135,36 @@ async function runChild() {
   assert.match(blocked, /CHƯA ghi được/)
   assert.equal((sqlite.query("SELECT COUNT(*) AS n FROM transactions WHERE type = 'expense'").get() as any).n, 0)
   assert.equal(scripted.length, 0)
+
+  // ─── trí nhớ dài hạn: remember → có trong system prompt lần sau → /reset không xóa → forget ───
+  const remembered = JSON.parse(await tool(authA, 'remember_fact').run({ content: 'Cà phê luôn ghi vào ví Momo' }))
+  assert.equal(remembered.ok, true)
+  await assert.rejects(() => tool(authA, 'remember_fact').run({ content: 'x'.repeat(301) }), /quá dài/)
+  // User B không xóa được điều A đã nhớ
+  await assert.rejects(() => tool(authB, 'forget_fact').run({ factId: remembered.factId }), /Không tìm thấy/)
+
+  scripted.push(say('Chào bạn!'))
+  await runAgent({ authUserId: authA, text: 'chào', channel: 'cli' })
+  const systemText = JSON.stringify(requests.at(-1).system)
+  assert.match(systemText, /Cà phê luôn ghi vào ví Momo/, 'facts must be injected into the system prompt')
+  assert.match(systemText, new RegExp(remembered.factId))
+
+  const { clearHistory } = await import('./memory')
+  clearHistory(profileA)
+  assert.equal((sqlite.query('SELECT COUNT(*) AS n FROM ai_user_facts').get() as any).n, 1, '/reset must keep long-term facts')
+
+  // Model nói "Đã ghi nhớ" mà không gọi tool → guard bắt làm lại; lần 2 gọi remember_fact thật.
+  scripted.push(
+    say('Đã ghi nhớ: lương về ngày 5.'),
+    callTool('remember_fact', { content: 'Lương về ngày 5 hằng tháng' }),
+    say('Đã ghi nhớ: lương về ngày 5.'),
+  )
+  assert.equal(await runAgent({ authUserId: authA, text: 'nhớ là lương tôi về ngày 5', channel: 'cli' }), 'Đã ghi nhớ: lương về ngày 5.')
+  assert.equal((sqlite.query('SELECT COUNT(*) AS n FROM ai_user_facts').get() as any).n, 2)
+
+  const forgotten = JSON.parse(await tool(authA, 'forget_fact').run({ factId: remembered.factId }))
+  assert.equal(forgotten.forgotten, 'Cà phê luôn ghi vào ví Momo')
+  assert.equal(scripted.length, 0)
   mock.stop(true)
 
   // ─── webhook Zalo ───

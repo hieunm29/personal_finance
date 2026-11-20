@@ -6,7 +6,11 @@
 
 ---
 
-## Các Thay đổi Gần đây (2026-11-19) — AI Assistant qua Zalo Bot
+## Các Thay đổi Gần đây (2026-11-20) — Trí nhớ dài hạn cho AI
+- Bảng `ai_user_facts` (migration 0004) + tool `remember_fact` / `forget_fact`; danh sách được chèn vào system prompt mỗi lượt. `/reset` chỉ xóa lịch sử chat, không xóa điều đã nhớ.
+- Guard kiểm tra thêm câu "Đã ghi nhớ"/"Đã quên"; "Đã ghi nhớ" không còn bị coi là ghi giao dịch.
+
+## Các Thay đổi (2026-11-19) — AI Assistant qua Zalo Bot
 - Dựng khung trợ lý AI (Claude + Zalo Bot Platform). Chi tiết: `doc/7.ai_assistant_architecture.md`.
 - Quyết định: Claude Messages API + Tool Runner tự host (không dùng Managed Agents); ghi giao dịch luôn + lệnh "hoàn tác"; liên kết tài khoản bằng mã `/link`.
 - Bước tiếp theo: chạy thử `bun run ai:chat` với API key thật; tạo bot Zalo + tunnel; thiết kế UI "Liên kết Zalo" ở trang Cài đặt (cần duyệt layout); xây bộ eval câu chat mẫu.
