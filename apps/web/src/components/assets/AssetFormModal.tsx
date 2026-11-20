@@ -1,552 +1,104 @@
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { QUERY_KEYS, type Asset, type AssetType, type UserProfile } from '@pf/shared'
+import { QUERY_KEYS, type Asset, type AssetType, type GoldUnit, type UserProfile } from '@pf/shared'
 import { useCreateAsset, useUpdateAsset } from '../../hooks/useAssets'
 import { apiClient } from '../../services/apiClient'
 import { formatCurrency } from '../../utils/format'
-import {
-  calculateGoldValueFromPrice,
-  getGoldPriceStatusMessage,
-  parseGoldMetadata,
-} from '../../utils/gold'
+import { calculateGoldValueFromPrice, parseGoldMetadata } from '../../utils/gold'
 
-const TYPE_LABELS: Record<string, string> = {
-  cash: '💵 Tiền mặt',
-  bank: '🏦 Ngân hàng',
-  gold: '🥇 Vàng',
-  stock: '📈 Cổ phiếu',
-  savings: '🏛️ Tiết kiệm',
-  real_estate: '🏠 Bất động sản',
-  debt: '💳 Nợ',
-}
+type FormType = Exclude<AssetType, 'bank'>
+type AccountKind = 'cash' | 'bank'
 
-interface Props {
-  isOpen: boolean
-  onClose: () => void
-  asset?: Asset | null
-  defaultTab?: AssetType
-}
-
-interface FormValues {
+interface FormState {
+  type: FormType
+  accountKind: AccountKind
   name: string
-  type: AssetType
-  currentValueDisplay: number
-  note: string
-  // bank
+  currentValue: string
   bankName: string
-  // gold
-  goldUnit: 'chi' | 'luong'
-  goldQty: number
-  // stock
+  goldUnit: GoldUnit
+  goldQty: string
+  goldPurchaseAmount: string
   ticker: string
-  stockQty: number
-  stockAvgBuyPrice: number
-  // savings
+  stockQty: string
+  stockAvgBuyPrice: string
+  stockCurrentPrice: string
   savingsBankName: string
-  savingsDepositAmount: number
-  savingsInterestRate: number
-  savingsTerm: number
+  savingsDepositAmount: string
+  savingsInterestRate: string
+  savingsTerm: string
   savingsDepositDate: string
-  // real_estate
   address: string
-  // debt
-  debtOriginalAmount: number
-  debtInterestRate: number
+  debtOriginalAmount: string
+  debtRemaining: string
+  debtInterestRate: string
   debtStartDate: string
-  debtTerm: number
+  debtTerm: string
+  note: string
 }
 
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '13px',
-  fontWeight: 600,
-  color: '#374151',
-  marginBottom: '4px',
+interface Props { isOpen: boolean; onClose: () => void; asset?: Asset | null; defaultTab?: AssetType }
+
+const TYPE_CHOICES: Array<{ type: FormType; label: string; icon: string }> = [
+  { type: 'cash', label: 'Tiền mặt', icon: '▣' }, { type: 'gold', label: 'Vàng', icon: '◉' },
+  { type: 'stock', label: 'Cổ phiếu', icon: '⌁' }, { type: 'savings', label: 'Tiết kiệm', icon: '▥' },
+  { type: 'debt', label: 'Nợ', icon: '▤' }, { type: 'real_estate', label: 'BĐS', icon: '⌂' },
+]
+
+function emptyState(type: FormType = 'cash'): FormState {
+  return { type, accountKind: 'cash', name: '', currentValue: '', bankName: '', goldUnit: 'luong', goldQty: '', goldPurchaseAmount: '', ticker: '', stockQty: '', stockAvgBuyPrice: '', stockCurrentPrice: '', savingsBankName: '', savingsDepositAmount: '', savingsInterestRate: '', savingsTerm: '12', savingsDepositDate: '', address: '', debtOriginalAmount: '', debtRemaining: '', debtInterestRate: '', debtStartDate: '', debtTerm: '12', note: '' }
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 12px',
-  border: '1px solid #e2e8f0',
-  borderRadius: '8px',
-  fontSize: '14px',
-  color: '#0f172a',
-  boxSizing: 'border-box',
-  outline: 'none',
-}
+function readMetadata(value: string | null): Record<string, unknown> { if (!value) return {}; try { const parsed = JSON.parse(value); return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {} } catch { return {} } }
+function text(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback }
+function numeric(value: unknown, fallback = ''): string { return typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback }
+function cents(value: string): number { return Math.round((Number(value) || 0) * 100) }
+function unitLabel(unit: GoldUnit): string { return unit === 'luong' ? 'Lượng' : unit === 'chi' ? 'Chỉ' : 'Phân' }
 
-const fieldStyle: React.CSSProperties = { marginBottom: '14px' }
+function formFromAsset(asset: Asset): FormState {
+  const metadata = readMetadata(asset.metadata)
+  const parsedGold = parseGoldMetadata(asset.metadata)
+  const type = asset.type === 'bank' ? 'cash' : asset.type as FormType
+  const quantity = typeof metadata.quantity === 'number' ? metadata.quantity : 0
+  return { ...emptyState(type), accountKind: asset.type === 'bank' ? 'bank' : 'cash', name: asset.name, currentValue: String(asset.currentValue / 100), bankName: text(metadata.bankName), goldUnit: parsedGold?.unit ?? 'luong', goldQty: parsedGold ? String(parsedGold.quantity) : '', goldPurchaseAmount: parsedGold?.purchaseAmount ? String(parsedGold.purchaseAmount / 100) : '', ticker: text(metadata.ticker), stockQty: numeric(quantity), stockAvgBuyPrice: typeof metadata.avgBuyPrice === 'number' ? String(metadata.avgBuyPrice / 100) : '', stockCurrentPrice: quantity > 0 ? String(asset.currentValue / 100 / quantity) : '', savingsBankName: text(metadata.bankName), savingsDepositAmount: typeof metadata.depositAmount === 'number' ? String(metadata.depositAmount / 100) : String(asset.currentValue / 100), savingsInterestRate: numeric(metadata.interestRate), savingsTerm: numeric(metadata.term, '12'), savingsDepositDate: text(metadata.depositDate), address: text(metadata.address), debtOriginalAmount: typeof metadata.originalAmount === 'number' ? String(metadata.originalAmount / 100) : String(asset.currentValue / 100), debtRemaining: String(asset.currentValue / 100), debtInterestRate: numeric(metadata.interestRate), debtStartDate: text(metadata.startDate), debtTerm: numeric(metadata.term, '12'), note: asset.note ?? '' }
+}
 
 export default function AssetFormModal({ isOpen, onClose, asset, defaultTab }: Props) {
-  const isEdit = !!asset
-  const createMutation = useCreateAsset()
-  const updateMutation = useUpdateAsset()
-  const isPending = createMutation.isPending || updateMutation.isPending
+  const [form, setForm] = useState<FormState>(emptyState(defaultTab === 'bank' ? 'cash' : (defaultTab as FormType | undefined) ?? 'cash'))
+  const [error, setError] = useState('')
+  const createMutation = useCreateAsset(); const updateMutation = useUpdateAsset()
+  const { data: profileRes } = useQuery({ queryKey: QUERY_KEYS.profile, queryFn: () => apiClient<{ data: UserProfile }>('/settings/profile') })
+  const goldPrice = profileRes?.data?.goldPricePerLuong ?? null
+  const isEdit = Boolean(asset); const isPending = createMutation.isPending || updateMutation.isPending
+  const set = (key: keyof FormState, value: string) => setForm((current) => ({ ...current, [key]: value }))
+  const currentType = form.type
 
-  const { register, handleSubmit, watch, reset, setValue } = useForm<FormValues>({
-    defaultValues: {
-      name: '',
-      type: defaultTab ?? 'cash',
-      currentValueDisplay: 0,
-      note: '',
-      bankName: '',
-      goldUnit: 'chi',
-      goldQty: 0,
-      ticker: '',
-      stockQty: 1,
-      stockAvgBuyPrice: 0,
-      savingsBankName: '',
-      savingsDepositAmount: 0,
-      savingsInterestRate: 0,
-      savingsTerm: 12,
-      savingsDepositDate: '',
-      address: '',
-      debtOriginalAmount: 0,
-      debtInterestRate: 0,
-      debtStartDate: '',
-      debtTerm: 12,
-    },
-  })
+  useEffect(() => { if (!isOpen) return; setForm(asset ? formFromAsset(asset) : emptyState(defaultTab === 'bank' ? 'cash' : (defaultTab as FormType | undefined) ?? 'cash')); setError('') }, [isOpen, asset, defaultTab])
+  useEffect(() => { if (isOpen && form.type === 'gold' && goldPrice) setForm((current) => ({ ...current, currentValue: String(goldPrice / 100) })) }, [isOpen, form.type, goldPrice])
 
-  const type = watch('type')
-  const goldUnit = watch('goldUnit')
-  const goldQty = watch('goldQty')
-  const { data: profileRes } = useQuery({
-    queryKey: QUERY_KEYS.profile,
-    queryFn: () => apiClient<{ data: UserProfile }>('/settings/profile'),
-  })
-  const goldPricePerLuong = profileRes?.data?.goldPricePerLuong ?? null
-  const goldPriceStatusMessage = type === 'gold' ? getGoldPriceStatusMessage(goldPricePerLuong) : null
-  const hasValidGoldQty = typeof goldQty === 'number' && Number.isFinite(goldQty) && goldQty >= 0
-  const goldQtyStatusMessage = type === 'gold' && !hasValidGoldQty
-    ? 'Số lượng vàng không hợp lệ'
-    : null
-  const goldDerivedValue = type === 'gold' && goldPricePerLuong && hasValidGoldQty
-    ? calculateGoldValueFromPrice(goldUnit, goldQty, goldPricePerLuong)
-    : null
-  const goldFormStatusMessage = goldPriceStatusMessage ?? goldQtyStatusMessage
-
-  useEffect(() => {
-    if (!isOpen) return
-    if (asset) {
-      const meta = parseGoldMetadata(asset.metadata)
-      const rawMeta = asset.metadata ? (JSON.parse(asset.metadata) as Record<string, unknown>) : {}
-      reset({
-        name: asset.name,
-        type: asset.type,
-        currentValueDisplay: asset.currentValue / 100,
-        note: asset.note ?? '',
-        bankName: (rawMeta.bankName as string) ?? '',
-        goldUnit: meta?.unit ?? 'chi',
-        goldQty: meta?.quantity ?? 0,
-        ticker: (rawMeta.ticker as string) ?? '',
-        stockQty: (rawMeta.quantity as number) ?? 1,
-        stockAvgBuyPrice: ((rawMeta.avgBuyPrice as number) ?? 0) / 100,
-        savingsBankName: (rawMeta.bankName as string) ?? '',
-        savingsDepositAmount: ((rawMeta.depositAmount as number) ?? 0) / 100,
-        savingsInterestRate: (rawMeta.interestRate as number) ?? 0,
-        savingsTerm: (rawMeta.term as number) ?? 12,
-        savingsDepositDate: (rawMeta.depositDate as string) ?? '',
-        address: (rawMeta.address as string) ?? '',
-        debtOriginalAmount: ((rawMeta.originalAmount as number) ?? 0) / 100,
-        debtInterestRate: (rawMeta.interestRate as number) ?? 0,
-        debtStartDate: (rawMeta.startDate as string) ?? '',
-        debtTerm: (rawMeta.term as number) ?? 12,
-      })
-    } else {
-      reset({
-        name: '',
-        type: defaultTab ?? 'cash',
-        currentValueDisplay: 0,
-        note: '',
-        bankName: '',
-        goldUnit: 'chi',
-        goldQty: 0,
-        ticker: '',
-        stockQty: 1,
-        stockAvgBuyPrice: 0,
-        savingsBankName: '',
-        savingsDepositAmount: 0,
-        savingsInterestRate: 0,
-        savingsTerm: 12,
-        savingsDepositDate: '',
-        address: '',
-        debtOriginalAmount: 0,
-        debtInterestRate: 0,
-        debtStartDate: '',
-        debtTerm: 12,
-      })
-    }
-  }, [isOpen, asset, defaultTab, reset])
-
-  function buildMetadata(t: AssetType, d: FormValues): Record<string, unknown> | null {
-    if (t === 'bank') return { bankName: d.bankName }
-    if (t === 'gold') return { unit: d.goldUnit, quantity: d.goldQty }
-    if (t === 'stock')
-      return {
-        ticker: d.ticker.toUpperCase(),
-        quantity: d.stockQty,
-        avgBuyPrice: Math.round(d.stockAvgBuyPrice * 100),
-      }
-    if (t === 'savings')
-      return {
-        bankName: d.savingsBankName,
-        depositAmount: Math.round(d.savingsDepositAmount * 100),
-        interestRate: d.savingsInterestRate,
-        term: d.savingsTerm,
-        depositDate: d.savingsDepositDate,
-      }
-    if (t === 'real_estate') return { address: d.address }
-    if (t === 'debt')
-      return {
-        originalAmount: Math.round(d.debtOriginalAmount * 100),
-        interestRate: d.debtInterestRate,
-        startDate: d.debtStartDate,
-        term: d.debtTerm,
-      }
-    return null
-  }
-
-  const onSubmit = handleSubmit(async (d) => {
-    const metadataObj = buildMetadata(d.type, d)
-    const currentValue = d.type === 'gold'
-      ? undefined
-      : Math.round(d.currentValueDisplay * 100)
-
-    if (d.type === 'gold' && (goldDerivedValue == null || !Number.isFinite(goldDerivedValue))) {
-      return
-    }
-
-    const payload = {
-      type: d.type,
-      name: d.name,
-      ...(currentValue !== undefined ? { currentValue } : {}),
-      metadata: metadataObj ? JSON.stringify(metadataObj) : undefined,
-      note: d.note || undefined,
-    }
-    if (isEdit && asset) {
-      await updateMutation.mutateAsync({ id: asset.id, data: payload })
-    } else {
-      await createMutation.mutateAsync(payload)
-    }
-    onClose()
-  })
+  const goldValue = useMemo(() => { const quantity = Number(form.goldQty); return goldPrice && quantity > 0 ? calculateGoldValueFromPrice(form.goldUnit, quantity, goldPrice) : 0 }, [form.goldQty, form.goldUnit, goldPrice])
+  const stockValue = Math.round((Number(form.stockQty) || 0) * (Number(form.stockCurrentPrice) || 0) * 100)
+  const stockCost = Math.round((Number(form.stockQty) || 0) * (Number(form.stockAvgBuyPrice) || 0) * 100)
+  const stockPnl = stockValue - stockCost
+  const savingsInterest = Math.round(cents(form.savingsDepositAmount) * (Number(form.savingsInterestRate) || 0) / 100 * ((Number(form.savingsTerm) || 0) / 12))
+  const debtOriginal = cents(form.debtOriginalAmount); const debtRemaining = cents(form.debtRemaining); const debtPaid = Math.max(0, debtOriginal - debtRemaining)
 
   if (!isOpen) return null
 
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: '12px',
-          padding: '24px',
-          width: '480px',
-          maxWidth: '90vw',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '20px',
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-            {isEdit ? 'Sửa tài sản' : 'Thêm tài sản'}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '20px',
-              cursor: 'pointer',
-              color: '#64748b',
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
-        </div>
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); setError(''); if (!form.name.trim()) { setError('Vui lòng nhập tên tài sản'); return }
+    let type: AssetType = form.type; let currentValue = cents(form.currentValue); let metadata: Record<string, unknown> | null = null
+    if (form.type === 'cash') { type = form.accountKind; metadata = form.accountKind === 'bank' ? { bankName: form.bankName.trim() } : null }
+    else if (form.type === 'gold') { const quantity = Number(form.goldQty); if (!goldPrice || quantity <= 0) { setError(goldPrice ? 'Số lượng vàng phải lớn hơn 0' : 'Hãy cấu hình giá vàng trước khi lưu'); return }; type = 'gold'; currentValue = 0; metadata = { unit: form.goldUnit, quantity, ...(Number(form.goldPurchaseAmount) > 0 ? { purchaseAmount: cents(form.goldPurchaseAmount) } : {}) } }
+    else if (form.type === 'stock') { if (!form.ticker.trim() || Number(form.stockQty) <= 0 || Number(form.stockCurrentPrice) < 0) { setError('Vui lòng nhập mã, số lượng và giá hiện tại hợp lệ'); return }; currentValue = stockValue; metadata = { ticker: form.ticker.trim().toUpperCase(), quantity: Number(form.stockQty), avgBuyPrice: cents(form.stockAvgBuyPrice) } }
+    else if (form.type === 'savings') { if (cents(form.savingsDepositAmount) <= 0 || Number(form.savingsInterestRate) < 0 || Number(form.savingsTerm) <= 0 || !form.savingsDepositDate) { setError('Vui lòng nhập đủ thông tin sổ tiết kiệm'); return }; currentValue = cents(form.savingsDepositAmount); metadata = { bankName: form.savingsBankName.trim(), depositAmount: currentValue, interestRate: Number(form.savingsInterestRate), term: Number(form.savingsTerm), depositDate: form.savingsDepositDate } }
+    else if (form.type === 'debt') { if (debtOriginal <= 0 || debtRemaining < 0 || debtRemaining > debtOriginal) { setError('Số dư nợ phải nằm trong khoảng từ 0 đến khoản vay gốc'); return }; type = 'debt'; currentValue = debtRemaining; metadata = { originalAmount: debtOriginal, interestRate: Number(form.debtInterestRate) || 0, startDate: form.debtStartDate, term: Number(form.debtTerm) || 0 } }
+    else if (form.type === 'real_estate') { if (currentValue < 0) { setError('Giá trị bất động sản không hợp lệ'); return }; metadata = { address: form.address.trim() } }
+    const payload = { type, name: form.name.trim(), currentValue: type === 'gold' ? undefined : currentValue, metadata: metadata ? JSON.stringify(metadata) : undefined, note: form.note.trim() || undefined }
+    try { if (asset) await updateMutation.mutateAsync({ id: asset.id, data: payload }); else await createMutation.mutateAsync(payload); onClose() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể lưu tài sản') }
+  }
 
-        <form onSubmit={onSubmit}>
-          <div style={fieldStyle}>
-            <label style={labelStyle}>Tên tài sản *</label>
-            <input {...register('name', { required: true })} style={inputStyle} placeholder="Nhập tên tài sản" />
-          </div>
+  const field = (label: string, key: keyof FormState, options: { type?: string; required?: boolean; placeholder?: string; unit?: string; readOnly?: boolean } = {}) => <label className="asset-form-field"><span>{label} {options.required && <em>*</em>}</span><div className={options.unit ? 'asset-input-unit' : ''}><input type={options.type ?? 'text'} value={form[key] as string} onChange={(event) => set(key, event.target.value)} placeholder={options.placeholder} readOnly={options.readOnly} min={options.type === 'number' ? 0 : undefined} step={options.type === 'number' ? 'any' : undefined} />{options.unit && <b>{options.unit}</b>}</div></label>
+  const typeOptions = TYPE_CHOICES.map((choice) => <button key={choice.type} type="button" className={`asset-type-option ${currentType === choice.type ? 'on' : ''}`} onClick={() => setForm((value) => ({ ...value, type: choice.type }))}><span>{choice.icon}</span>{choice.label}</button>)
 
-          <div style={fieldStyle}>
-            <label style={labelStyle}>Loại tài sản *</label>
-            <select {...register('type')} style={inputStyle}>
-              {Object.entries(TYPE_LABELS).map(([val, label]) => (
-                <option key={val} value={val}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {type !== 'gold' && (
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Giá trị hiện tại (VND) *</label>
-              <input
-                {...register('currentValueDisplay', { valueAsNumber: true, min: 0 })}
-                type="number"
-                min={0}
-                step={1000}
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-          )}
-
-          {type === 'bank' && (
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Tên ngân hàng *</label>
-              <input {...register('bankName', { required: true })} style={inputStyle} placeholder="VD: Vietcombank" />
-            </div>
-          )}
-
-          {type === 'gold' && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Đơn vị</label>
-                  <select {...register('goldUnit')} style={inputStyle}>
-                    <option value="chi">Chỉ</option>
-                    <option value="luong">Lượng</option>
-                  </select>
-                </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Số lượng</label>
-                  <input
-                    {...register('goldQty', {
-                      valueAsNumber: true,
-                      min: 0,
-                      setValueAs: (value) => (value === '' || value == null ? Number.NaN : Number(value)),
-                    })}
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Giá 1 lượng vàng (từ cấu hình vàng)</label>
-                <input
-                  value={goldPricePerLuong ? formatCurrency(goldPricePerLuong) : 'Chưa cấu hình'}
-                  readOnly
-                  style={{ ...inputStyle, background: '#f8fafc', color: goldPricePerLuong ? '#0f172a' : '#dc2626' }}
-                />
-              </div>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Giá trị hiện tại (tự tính)</label>
-                <input
-                  value={goldDerivedValue != null ? formatCurrency(goldDerivedValue) : 'Chưa thể tính'}
-                  readOnly
-                  style={{ ...inputStyle, background: '#f8fafc' }}
-                />
-                {goldFormStatusMessage && (
-                  <div style={{ marginTop: '6px', fontSize: '12px', color: '#dc2626' }}>
-                    {goldFormStatusMessage}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {type === 'stock' && (
-            <>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Mã cổ phiếu</label>
-                <input
-                  {...register('ticker')}
-                  style={inputStyle}
-                  placeholder="VD: VNM"
-                  onInput={(e) => {
-                    const el = e.currentTarget
-                    el.value = el.value.toUpperCase()
-                  }}
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Số lượng *</label>
-                  <input
-                    {...register('stockQty', { valueAsNumber: true, min: 1 })}
-                    type="number"
-                    min={1}
-                    step={1}
-                    style={inputStyle}
-                  />
-                </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Giá mua TB (VND)</label>
-                  <input
-                    {...register('stockAvgBuyPrice', { valueAsNumber: true, min: 0 })}
-                    type="number"
-                    min={0}
-                    step={100}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {type === 'savings' && (
-            <>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Ngân hàng</label>
-                <input {...register('savingsBankName')} style={inputStyle} placeholder="VD: Techcombank" />
-              </div>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Số tiền gửi (VND)</label>
-                <input
-                  {...register('savingsDepositAmount', { valueAsNumber: true, min: 0 })}
-                  type="number"
-                  min={0}
-                  step={1000}
-                  style={inputStyle}
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Lãi suất (%/năm)</label>
-                  <input
-                    {...register('savingsInterestRate', { valueAsNumber: true, min: 0 })}
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    style={inputStyle}
-                  />
-                </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Kỳ hạn (tháng)</label>
-                  <input
-                    {...register('savingsTerm', { valueAsNumber: true, min: 1 })}
-                    type="number"
-                    min={1}
-                    step={1}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Ngày gửi</label>
-                <input {...register('savingsDepositDate')} type="date" style={inputStyle} />
-              </div>
-            </>
-          )}
-
-          {type === 'real_estate' && (
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Địa chỉ</label>
-              <input {...register('address')} style={inputStyle} placeholder="Nhập địa chỉ (tuỳ chọn)" />
-            </div>
-          )}
-
-          {type === 'debt' && (
-            <>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Số tiền gốc (VND)</label>
-                <input
-                  {...register('debtOriginalAmount', { valueAsNumber: true, min: 0 })}
-                  type="number"
-                  min={0}
-                  step={1000}
-                  style={inputStyle}
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Lãi suất (%/năm)</label>
-                  <input
-                    {...register('debtInterestRate', { valueAsNumber: true, min: 0 })}
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    style={inputStyle}
-                  />
-                </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Kỳ hạn (tháng)</label>
-                  <input
-                    {...register('debtTerm', { valueAsNumber: true, min: 1 })}
-                    type="number"
-                    min={1}
-                    step={1}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Ngày bắt đầu</label>
-                <input {...register('debtStartDate')} type="date" style={inputStyle} />
-              </div>
-            </>
-          )}
-
-          <div style={fieldStyle}>
-            <label style={labelStyle}>Ghi chú</label>
-            <input {...register('note')} style={inputStyle} placeholder="Tuỳ chọn" />
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: '8px 20px',
-                background: '#fff',
-                color: '#374151',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-              }}
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={isPending || (type === 'gold' && goldFormStatusMessage !== null)}
-              style={{
-                padding: '8px 20px',
-                background: '#4f46e5',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: isPending || (type === 'gold' && goldFormStatusMessage !== null) ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-                opacity: isPending || (type === 'gold' && goldFormStatusMessage !== null) ? 0.7 : 1,
-              }}
-            >
-              {isPending ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Thêm'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
+  return <div className="asset-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}><section className="asset-form-modal" role="dialog" aria-modal="true" aria-labelledby="asset-form-title"><header><div><h2 id="asset-form-title">{isEdit ? 'Sửa tài sản' : 'Thêm tài sản'}</h2><p>{isEdit ? 'Cập nhật thông tin và giá trị hiện tại' : 'Chọn loại tài sản để nhập đúng thông tin'}</p></div><button type="button" aria-label="Đóng" onClick={onClose}>×</button></header><form onSubmit={submit}><div className="asset-form-body"><div className="asset-form-field"><span>Loại tài sản</span><div className="asset-type-grid">{typeOptions}</div></div>{currentType === 'cash' && <><div className="asset-form-field"><span>Loại tài khoản</span><div className="asset-segment"><button type="button" className={form.accountKind === 'cash' ? 'on' : ''} onClick={() => set('accountKind', 'cash')}>Tiền mặt</button><button type="button" className={form.accountKind === 'bank' ? 'on' : ''} onClick={() => set('accountKind', 'bank')}>Ngân hàng</button></div></div>{field('Tên tài sản', 'name', { required: true, placeholder: form.accountKind === 'bank' ? 'Tài khoản VPBank' : 'Ví tiền mặt' })}{form.accountKind === 'bank' && field('Ngân hàng', 'bankName', { placeholder: 'VD: Vietcombank' })}{field('Giá trị hiện tại', 'currentValue', { type: 'number', required: true, placeholder: '0', unit: '₫' })}</>}{currentType === 'gold' && <><div className="asset-form-grid two">{field('Tên lô vàng', 'name', { required: true, placeholder: 'Nhẫn trơn 9999' })}<div className="asset-form-field"><span>Đơn vị</span><div className="asset-segment three">{(['luong', 'chi', 'phan'] as GoldUnit[]).map((unit) => <button key={unit} type="button" className={form.goldUnit === unit ? 'on' : ''} onClick={() => set('goldUnit', unit)}>{unitLabel(unit)}</button>)}</div></div></div>{field('Số lượng', 'goldQty', { type: 'number', required: true, placeholder: '1' })}<div className="asset-form-grid two">{field('Giá mua', 'goldPurchaseAmount', { type: 'number', placeholder: 'Tổng tiền đã trả', unit: '₫' })}{field('Giá hiện tại', 'currentValue', { type: 'text', unit: '₫/lượng', readOnly: true, placeholder: goldPrice ? formatCurrency(goldPrice) : 'Chưa cấu hình' })}</div><div className="asset-calculation"><span>Giá trị hiện tại</span><strong>{formatCurrency(goldValue)}</strong><span>Lãi / lỗ</span><b className={Number(form.goldPurchaseAmount) > 0 && goldValue - cents(form.goldPurchaseAmount) < 0 ? 'negative' : ''}>{Number(form.goldPurchaseAmount) > 0 ? `${goldValue - cents(form.goldPurchaseAmount) >= 0 ? '+' : ''}${formatCurrency(goldValue - cents(form.goldPurchaseAmount))}` : 'Chưa có giá vốn'}</b></div></>}{currentType === 'stock' && <><div className="asset-form-grid two">{field('Mã cổ phiếu', 'ticker', { required: true, placeholder: 'DCM' })}{field('Tên hiển thị', 'name', { required: true, placeholder: 'Phân bón Cà Mau' })}</div><div className="asset-form-grid three">{field('Số lượng', 'stockQty', { type: 'number', required: true, placeholder: '2.000', unit: 'cp' })}{field('Giá mua TB', 'stockAvgBuyPrice', { type: 'number', placeholder: '32.000', unit: '₫' })}{field('Giá hiện tại', 'stockCurrentPrice', { type: 'number', required: true, placeholder: '38.500', unit: '₫' })}</div><div className="asset-calculation"><span>Giá trị hiện tại</span><strong>{formatCurrency(stockValue)}</strong><span>Lãi / lỗ</span><b className={stockPnl < 0 ? 'negative' : ''}>{stockPnl >= 0 ? '+' : ''}{formatCurrency(stockPnl)}</b></div></>}{currentType === 'savings' && <><div className="asset-form-grid two">{field('Tên sổ', 'name', { required: true, placeholder: 'Sổ tiết kiệm VCB' })}{field('Ngân hàng', 'savingsBankName', { placeholder: 'Vietcombank' })}</div><div className="asset-form-grid two">{field('Số tiền gửi', 'savingsDepositAmount', { type: 'number', required: true, placeholder: '100.000.000', unit: '₫' })}{field('Lãi suất', 'savingsInterestRate', { type: 'number', required: true, placeholder: '6,2', unit: '%/năm' })}</div><div className="asset-form-field"><span>Kỳ hạn</span><div className="asset-chip-list">{[1, 3, 6, 12, 24].map((term) => <button type="button" key={term} className={form.savingsTerm === String(term) ? 'on' : ''} onClick={() => set('savingsTerm', String(term))}>{term} tháng</button>)}</div></div>{field('Ngày gửi', 'savingsDepositDate', { type: 'date', required: true })}<div className="asset-calculation"><span>Ngày đáo hạn</span><strong>{form.savingsDepositDate && form.savingsTerm ? new Date(new Date(`${form.savingsDepositDate}T00:00:00`).setMonth(new Date(`${form.savingsDepositDate}T00:00:00`).getMonth() + Number(form.savingsTerm))).toLocaleDateString('vi-VN') : '—'}</strong><span>Lãi dự kiến</span><b>+{formatCurrency(savingsInterest)}</b></div></>}{currentType === 'debt' && <><div className="asset-form-grid two">{field('Tên khoản nợ', 'name', { required: true, placeholder: 'Vay mua xe' })}{field('Lãi suất', 'debtInterestRate', { type: 'number', placeholder: '9,0', unit: '%/năm' })}</div><div className="asset-form-grid two">{field('Khoản vay gốc', 'debtOriginalAmount', { type: 'number', required: true, placeholder: '60.000.000', unit: '₫' })}{field('Còn nợ', 'debtRemaining', { type: 'number', required: true, placeholder: '42.000.000', unit: '₫' })}</div><div className="asset-form-grid two">{field('Ngày bắt đầu', 'debtStartDate', { type: 'date' })}{field('Kỳ hạn', 'debtTerm', { type: 'number', placeholder: '36', unit: 'tháng' })}</div><div className="asset-calculation"><span>Đã trả</span><strong>{formatCurrency(debtPaid)}</strong><b>{debtOriginal > 0 ? `${Math.round(debtPaid / debtOriginal * 100)}%` : '0%'}</b></div></>}{currentType === 'real_estate' && <><div className="asset-form-grid two">{field('Tên bất động sản', 'name', { required: true, placeholder: 'Căn hộ Vinhomes' })}{field('Giá trị hiện tại', 'currentValue', { type: 'number', required: true, placeholder: '2.000.000.000', unit: '₫' })}</div>{field('Địa chỉ', 'address', { placeholder: 'Quận 1, TP.HCM' })}</>}{field('Ghi chú', 'note', { placeholder: 'Thêm ghi chú...' })}{error && <p className="asset-form-error">{error}</p>}</div><footer><span>Giá trị được tính lại theo thông tin bạn nhập</span><button type="button" onClick={onClose}>Hủy</button><button type="submit" className="asset-primary-button" disabled={isPending}>{isPending ? 'Đang lưu...' : 'Lưu tài sản'}</button></footer></form></section></div>
 }

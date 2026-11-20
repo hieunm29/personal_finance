@@ -115,6 +115,7 @@ export const transactions = sqliteTable('transactions', {
   categoryId: text('category_id').notNull().references(() => categories.id),
   walletId: text('wallet_id').references(() => wallets.id), // nullable for bank asset transactions
   assetId: text('asset_id').references(() => assets.id), // for bank asset transactions
+  recurringTemplateId: text('recurring_template_id'), // nullable link for transactions created from a recurring schedule
   toWalletId: text('to_wallet_id').references(() => wallets.id),
   date: text('date').notNull(), // YYYY-MM-DD
   note: text('note'),
@@ -129,8 +130,8 @@ export const recurringTemplates = sqliteTable('recurring_templates', {
   type: text('type').notNull(), // 'income' | 'expense' | 'transfer'
   amount: integer('amount').notNull(), // stored in cents
   categoryId: text('category_id').notNull().references(() => categories.id),
-  walletId: text('wallet_id').notNull().references(() => wallets.id),
-  assetId: text('asset_id').notNull().references(() => assets.id), // for recurring templates
+  walletId: text('wallet_id').references(() => wallets.id),
+  assetId: text('asset_id').references(() => assets.id), // for bank-asset recurring templates
   note: text('note'),
   interval: text('interval').notNull(), // 'weekly' | 'monthly' | 'yearly'
   startDate: text('start_date').notNull(), // YYYY-MM-DD

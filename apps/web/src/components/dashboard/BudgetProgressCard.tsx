@@ -1,81 +1,77 @@
 import { useNavigate } from 'react-router'
-import { type BudgetProgressItem } from '@pf/shared'
-import { useBudgetProgress } from '../../hooks/useBudget'
+import { type BudgetProgressItem, type BudgetWithProgress } from '@pf/shared'
 import { formatCurrency } from '../../utils/format'
+import TransactionCategoryIcon from '../transaction/TransactionCategoryIcon'
+import './dashboard-details.css'
 
 interface Props {
   budgetProgress: BudgetProgressItem[] | null
+  currency?: string
+  month?: string
+  progress?: BudgetWithProgress | null
 }
 
-export default function BudgetProgressCard({ budgetProgress }: Props) {
+function remainingDays(month?: string): number | null {
+  const now = new Date()
+  const [year, monthNumber] = (month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`).split('-').map(Number)
+  const lastDay = new Date(year, monthNumber, 0).getDate()
+  if (year !== now.getFullYear() || monthNumber !== now.getMonth() + 1) return null
+  return Math.max(lastDay - now.getDate(), 0)
+}
+
+function categoryIcon(name: string): string {
+  const value = name.toLowerCase()
+  if (value.includes('ăn') || value.includes('food')) return 'utensils'
+  if (value.includes('nhà') || value.includes('home')) return 'house'
+  if (value.includes('mua') || value.includes('shopping')) return 'shirt'
+  if (value.includes('di chuyển') || value.includes('xe')) return 'car'
+  return 'wallet'
+}
+
+export default function BudgetProgressCard({ budgetProgress, currency = 'VND', month, progress }: Props) {
   const navigate = useNavigate()
-  const currentMonth = new Date().toLocaleDateString('sv').substring(0, 7)
-  const { data: progressRes } = useBudgetProgress(currentMonth)
-  const progress = progressRes?.data
 
   if (budgetProgress === null) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 shadow-sm">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <span className="text-3xl">💰</span>
-          <div>
-            <p className="font-medium text-gray-700">Thiết lập ngân sách tháng</p>
-            <p className="mt-1 text-sm text-gray-400">Theo dõi chi tiêu theo danh mục</p>
-          </div>
-          <button
-            onClick={() => navigate('/budget')}
-            className="mt-1 rounded-lg bg-blue-500 px-4 py-1.5 text-sm text-white hover:bg-blue-600"
-          >
-            Thiết lập →
-          </button>
+      <section className="db-card db-detail-budget" aria-label="Ngân sách tháng">
+        <div className="db-card-head">
+          <div><h2 className="db-card-title">Ngân sách tháng</h2><p className="db-card-sub">Theo dõi chi tiêu theo danh mục</p></div>
         </div>
-      </div>
+        <div className="db-empty db-detail-budget-empty"><span aria-hidden="true">💰</span><p>Chưa thiết lập ngân sách tháng</p><button type="button" className="db-link" onClick={() => navigate('/budget')}>Thiết lập →</button></div>
+      </section>
     )
   }
 
-  const pct = progress?.percentage ?? 0
-  const warningBadge = pct >= 100
-    ? <span style={{ color: '#dc2626', fontSize: '13px' }}>🔴 Đã vượt ngân sách ({pct}%)</span>
-    : pct >= 80
-      ? <span style={{ color: '#f59e0b', fontSize: '13px' }}>⚠ Gần đạt ngân sách ({pct}%)</span>
-      : null
+  const remaining = progress?.remaining ?? budgetProgress.reduce((sum, item) => sum + item.limit - item.spent, 0)
+  const days = remainingDays(month)
+  const categoryMeta = new Map(progress?.categories.map((item) => [item.categoryId, item.category]) ?? [])
 
   return (
-    <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>Ngân sách tháng này</span>
-        {warningBadge}
+    <section className="db-card db-detail-budget" aria-label="Ngân sách tháng">
+      <div className="db-card-head">
+        <div><h2 className="db-card-title">Ngân sách tháng</h2><p className="db-card-sub num">{remaining >= 0 ? `Còn ${formatCurrency(remaining, currency)}${days === null ? '' : ` cho ${days} ngày`}` : `Đã vượt ${formatCurrency(Math.abs(remaining), currency)}`}</p></div>
+        <button type="button" className="db-link" onClick={() => navigate('/budget')}>Chi tiết <span aria-hidden="true">→</span></button>
       </div>
-
-      {budgetProgress.length === 0 ? (
-        <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>Chưa có ngân sách theo danh mục</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {budgetProgress.length === 0 ? <div className="db-empty">Chưa có ngân sách theo danh mục</div> : (
+        <div className="db-detail-budget-list">
           {budgetProgress.map((item) => {
-            const spent = item.spent
-            const limit = item.limit
-            const itemPct = limit > 0 ? Math.round(spent / limit * 100) : 0
-            const barColor = itemPct >= 100 ? '#dc2626' : itemPct >= 80 ? '#f59e0b' : '#16a34a'
+            const pct = item.limit > 0 ? Math.round((item.spent / item.limit) * 100) : item.spent > 0 ? 101 : 0
+            const noLimitOverage = item.limit <= 0 && item.spent > 0
+            const cappedPct = Math.min(pct, 100)
+            const color = pct >= 100 ? '#DC2626' : pct >= 80 ? '#D97706' : '#059669'
+            const meta = categoryMeta.get(item.categoryId)
             return (
-              <div key={item.categoryId}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                  <span style={{ color: '#374151' }}>{item.categoryName}</span>
-                  <span style={{ color: itemPct >= 100 ? '#dc2626' : '#374151' }}>
-                    {formatCurrency(spent)} / {formatCurrency(limit)}
-                  </span>
-                </div>
-                <div style={{ background: '#e2e8f0', borderRadius: '9999px', height: '6px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(itemPct, 100)}%`, height: '100%', background: barColor, borderRadius: '9999px', transition: 'all 0.3s' }} />
-                </div>
+              <div className="db-detail-budget-row" key={item.categoryId}>
+                <div className="db-detail-budget-top"><span className="db-detail-budget-name"><span className="db-detail-budget-icon" style={{ color: meta?.color ?? color }} aria-hidden="true"><TransactionCategoryIcon icon={meta?.icon ?? categoryIcon(item.categoryName)} name={item.categoryName} size={16} /></span>{item.categoryName}</span><span className="db-detail-budget-value"><strong style={{ color: pct >= 100 ? '#DC2626' : undefined }}>{formatCurrency(item.spent, currency)}</strong> / {formatCurrency(item.limit, currency)}</span></div>
+                <div className="db-bar" aria-label={noLimitOverage ? `${item.categoryName}: đã chi nhưng chưa có hạn mức` : `${item.categoryName}: ${pct}% ngân sách đã dùng`}><span style={{ width: `${cappedPct}%`, background: color }} /></div>
+                {(pct > 100 || noLimitOverage) && <p className="db-detail-budget-hint db-detail-negative">Vượt {formatCurrency(Math.max(item.spent - item.limit, 0), currency)}{item.limit > 0 ? ` (${pct}%)` : ' (không có hạn mức)'}</p>}
+                {pct >= 80 && pct < 100 && <p className="db-detail-budget-hint db-detail-warn">{pct}% · sắp chạm giới hạn</p>}
+                {pct === 100 && <p className="db-detail-budget-hint">100% · đã dùng hết ngân sách</p>}
               </div>
             )
           })}
         </div>
       )}
-
-      <button onClick={() => navigate('/budget')} style={{ marginTop: '12px', fontSize: '13px', color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-        Xem chi tiết →
-      </button>
-    </div>
+    </section>
   )
 }

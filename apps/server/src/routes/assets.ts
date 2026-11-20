@@ -10,6 +10,8 @@ import {
   getNetWorth,
   updateAssetValue,
   getNetWorthHistory,
+  getAssetOverview,
+  revalueAssets,
 } from '../services/assetService'
 
 type Variables = { userId: string }
@@ -28,6 +30,14 @@ assetRoute.get('/networth-history', zValidator('query', historyQuerySchema), (c)
   const { limit } = c.req.valid('query')
   const data = getNetWorthHistory(c.get('userId'), limit)
   return c.json({ data })
+})
+
+assetRoute.get('/overview', (c) => {
+  return c.json({ data: getAssetOverview(c.get('userId')) })
+})
+
+assetRoute.post('/revalue', (c) => {
+  return c.json({ data: revalueAssets(c.get('userId')) })
 })
 
 assetRoute.get('/', (c) => {

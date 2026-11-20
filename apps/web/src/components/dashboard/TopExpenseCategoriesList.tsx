@@ -1,74 +1,100 @@
 import { useNavigate } from 'react-router'
 import { type TopExpenseCategory } from '@pf/shared'
 import { formatCurrency } from '../../utils/format'
+import './dashboard-details.css'
 
 interface Props {
   categories: TopExpenseCategory[]
   currency: string
-  month: string // YYYY-MM
+  month: string
+  totalExpense?: number
 }
 
-export default function TopExpenseCategoriesList({ categories, currency, month }: Props) {
-  const navigate = useNavigate()
-  const [y, m] = month.split('-').map(Number)
-  const monthStart = `${month}-01`
-  const monthEnd = new Date(y, m, 0).toLocaleDateString('sv')
+const COLORS = ['#6366F1', '#F59E0B', '#06B6D4', '#EC4899', '#94A3B8']
+const CIRCUMFERENCE = 2 * Math.PI * 54
 
-  if (categories.length === 0) {
+function compactAmount(amount: number, currency: string): string {
+  const value = amount / 100
+  if (currency === 'VND' && value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}tr`
+  return formatCurrency(amount, currency)
+}
+
+interface ExpenseItem extends TopExpenseCategory {
+  isRemainder?: boolean
+}
+
+function monthRange(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  return { start: `${month}-01`, end: new Date(year, monthNumber, 0).toLocaleDateString('sv') }
+}
+
+export default function TopExpenseCategoriesList({ categories, currency, month, totalExpense }: Props) {
+  const navigate = useNavigate()
+  const { start, end } = monthRange(month)
+  const knownTotal = categories.reduce((sum, category) => sum + category.amount, 0)
+  const remainder = totalExpense !== undefined ? Math.max(totalExpense - knownTotal, 0) : 0
+  const items: ExpenseItem[] = remainder > 0 ? [...categories, {
+    categoryId: null,
+    categoryName: 'Khác',
+    categoryIcon: null,
+    categoryColor: '#94A3B8',
+    amount: remainder,
+    percentage: totalExpense ? Math.round((remainder / totalExpense) * 100) : 0,
+    isRemainder: true,
+  }] : categories
+  const chartTotal = totalExpense ?? knownTotal
+
+  const goToCategory = (item: ExpenseItem) => {
+    const params = new URLSearchParams({ dateFrom: start, dateTo: end })
+    if (item.categoryId && !item.isRemainder) params.set('categoryId', item.categoryId)
+    navigate('/transactions?' + params.toString())
+  }
+
+  if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 font-semibold text-gray-800">Top chi tiêu tháng</h3>
-        <p className="text-center text-sm text-gray-400">Chưa có chi tiêu trong tháng này</p>
-      </div>
+      <section className="db-card db-detail-expenses" aria-label="Chi tiêu theo danh mục">
+        <div className="db-card-head">
+          <div><h2 className="db-card-title">Chi tiêu theo danh mục</h2><p className="db-card-sub">Tháng {Number(month.split('-')[1])}/{month.split('-')[0]}</p></div>
+        </div>
+        <div className="db-empty">Chưa có chi tiêu trong tháng này</div>
+      </section>
     )
   }
 
+  let offset = 0
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-6 py-4">
-        <h3 className="font-semibold text-gray-800">Top chi tiêu tháng</h3>
+    <section className="db-card db-detail-expenses" aria-label="Chi tiêu theo danh mục">
+      <div className="db-card-head">
+        <div><h2 className="db-card-title">Chi tiêu theo danh mục</h2><p className="db-card-sub">Tháng {Number(month.split('-')[1])}/{month.split('-')[0]}</p></div>
+        <button type="button" className="db-link db-detail-report-link" onClick={() => navigate('/reports')}>Báo cáo <span aria-hidden="true">→</span></button>
       </div>
-      <ul className="divide-y divide-gray-50">
-        {categories.map((cat) => (
-          <li
-            key={cat.categoryId ?? 'null'}
-            onClick={() => {
-              const params = new URLSearchParams({ dateFrom: monthStart, dateTo: monthEnd })
-              if (cat.categoryId) params.set('categoryId', cat.categoryId)
-              navigate('/transactions?' + params)
-            }}
-            className="cursor-pointer px-6 py-3 hover:bg-gray-50"
-          >
-            <div className="flex items-center gap-3">
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                style={{ backgroundColor: cat.categoryColor ?? '#9ca3af' }}
-              >
-                {cat.categoryName[0]}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <p className="truncate text-sm font-medium text-gray-800">{cat.categoryName}</p>
-                  <div className="ml-2 flex items-center gap-2 shrink-0">
-                    <span className="text-sm font-semibold text-red-600">
-                      {formatCurrency(cat.amount, currency)}
-                    </span>
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600">
-                      {cat.percentage}%
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-1 h-1 w-full rounded bg-gray-100">
-                  <div
-                    className="h-1 rounded bg-red-400"
-                    style={{ width: `${cat.percentage}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
+      <div className="db-detail-donut-wrap">
+        <div className="db-detail-donut" role="img" aria-label={`Cơ cấu chi tiêu, tổng ${formatCurrency(chartTotal, currency)}`}>
+          <svg viewBox="0 0 140 140" aria-hidden="true">
+            <circle cx="70" cy="70" r="54" fill="none" stroke="#EEF0F5" strokeWidth="18" />
+            {items.map((item, index) => {
+              const length = chartTotal > 0 ? (item.amount / chartTotal) * CIRCUMFERENCE : 0
+              const dashOffset = -offset
+              offset += length
+              return <circle key={`${item.categoryId ?? 'null'}-${index}-arc`} cx="70" cy="70" r="54" fill="none" stroke={item.categoryColor ?? COLORS[index % COLORS.length]} strokeWidth="18" strokeDasharray={`${length} ${CIRCUMFERENCE}`} strokeDashoffset={dashOffset} />
+            })}
+          </svg>
+          <div className="db-detail-donut-center"><strong>{compactAmount(chartTotal, currency)}</strong><span>tổng chi</span></div>
+        </div>
+        <ul className="db-detail-category-list" aria-label="Danh mục chi tiêu">
+          {items.map((item, index) => {
+            const color = item.categoryColor ?? COLORS[index % COLORS.length]
+            return (
+              <li key={`${item.categoryId ?? 'null'}-${item.isRemainder ? 'remainder' : index}`}>
+                <button type="button" className="db-detail-category" onClick={() => goToCategory(item)} aria-label={item.isRemainder ? 'Xem tất cả giao dịch trong tháng' : `Lọc giao dịch danh mục ${item.categoryName}`}>
+                  <span className="db-detail-category-name"><i className="db-swatch" style={{ background: color }} />{item.categoryName}</span>
+                  <span className="db-detail-category-value">{compactAmount(item.amount, currency)} <small>{item.percentage}%</small></span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </section>
   )
 }

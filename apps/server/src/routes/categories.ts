@@ -1,13 +1,15 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
-import { createCategorySchema, updateCategorySchema } from '@pf/shared'
+import { categoryOrderSchema, createCategorySchema, updateCategorySchema } from '@pf/shared'
 import {
   getCategories,
   createCategory,
   updateCategory,
   toggleCategoryVisibility,
   deleteCategory,
+  reorderCategories,
+  getCategoryUsage,
 } from '../services/categoryService'
 
 type Variables = { userId: string }
@@ -35,6 +37,15 @@ categoriesRoute.post('/', zValidator('json', createCategorySchema), (c) => {
   const authUserId = c.get('userId')
   const category = createCategory(authUserId, data)
   return c.json({ data: category }, 201)
+})
+
+categoriesRoute.patch('/order', zValidator('json', categoryOrderSchema), (c) => {
+  reorderCategories(c.get('userId'), c.req.valid('json').items)
+  return c.body(null, 204)
+})
+
+categoriesRoute.get('/:id/usage', (c) => {
+  return c.json({ data: getCategoryUsage(c.get('userId'), c.req.param('id')) })
 })
 
 categoriesRoute.put('/:id', zValidator('json', updateCategorySchema), (c) => {

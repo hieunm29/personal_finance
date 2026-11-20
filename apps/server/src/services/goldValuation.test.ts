@@ -16,6 +16,10 @@ describe('goldValuation', () => {
     expect(calculateGoldAssetValue({ unit: 'chi', quantity: 5 }, 9_000_000_000)).toBe(4_500_000_000)
   })
 
+  test('calculates current value for phan assets', () => {
+    expect(calculateGoldAssetValue({ unit: 'phan', quantity: 25 }, 9_000_000_000)).toBe(2_250_000_000)
+  })
+
   test('rejects missing configured gold price', () => {
     expect(() => calculateGoldAssetValue({ unit: 'chi', quantity: 1 }, null)).toThrow(
       'Chưa cấu hình giá 1 lượng vàng',

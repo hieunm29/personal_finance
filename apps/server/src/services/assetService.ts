@@ -2,7 +2,16 @@ import { eq, desc, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { assets, assetHistory, userProfiles } from '../db/schema'
 import type { CreateAssetInput, UpdateAssetInput } from '@pf/shared'
-import type { Asset, NetWorthData, NetWorthHistoryPoint, AssetAllocationItem } from '@pf/shared'
+import type {
+  Asset,
+  AssetOverview,
+  AssetOverviewGroup,
+  AssetOverviewItem,
+  AssetType,
+  NetWorthData,
+  NetWorthHistoryPoint,
+  AssetAllocationItem,
+} from '@pf/shared'
 import {
   assertGoldManualValueUpdateAllowed,
   buildGoldRevaluationUpdates,
@@ -20,6 +29,8 @@ const TYPE_LABELS: Record<string, string> = {
   real_estate: 'Bất động sản',
   debt: 'Nợ',
 }
+
+const ASSET_TYPE_ORDER: AssetType[] = ['gold', 'stock', 'savings', 'cash', 'bank', 'debt', 'real_estate']
 
 function getProfileId(authUserId: string): string {
   const p = db.select({ id: userProfiles.id }).from(userProfiles).where(eq(userProfiles.authUserId, authUserId)).get()
@@ -262,6 +273,145 @@ export function getNetWorthHistory(authUserId: string, limit?: number): NetWorth
     cursor.setUTCMonth(cursor.getUTCMonth() + 1)
   }
   return limit ? result.slice(-limit) : result
+}
+
+function readMetadata(metadata: string | null): Record<string, unknown> {
+  if (!metadata) return {}
+  try {
+    const parsed = JSON.parse(metadata)
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+
+function numberValue(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function dateValue(value: unknown): string | null {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
+}
+
+function addMonths(date: string | null, months: number | null): string | null {
+  if (!date || months === null) return null
+  const result = new Date(`${date}T00:00:00`)
+  if (Number.isNaN(result.getTime())) return null
+  result.setMonth(result.getMonth() + months)
+  return result.toLocaleDateString('sv')
+}
+
+function buildAssetOverviewItem(row: typeof assets.$inferSelect): AssetOverviewItem {
+  const metadata = readMetadata(row.metadata)
+  const quantity = numberValue(metadata.quantity)
+  const avgBuyPrice = numberValue(metadata.avgBuyPrice)
+  const purchaseAmount = numberValue(metadata.purchaseAmount)
+  const depositAmount = numberValue(metadata.depositAmount)
+  const interestRate = numberValue(metadata.interestRate)
+  const termMonths = numberValue(metadata.term)
+  const startDate = dateValue(metadata.depositDate) ?? dateValue(metadata.startDate)
+  const costBasis = row.type === 'stock' && quantity !== null && avgBuyPrice !== null
+    ? Math.round(quantity * avgBuyPrice)
+    : row.type === 'gold'
+      ? purchaseAmount
+      : row.type === 'savings'
+        ? depositAmount
+        : null
+  const expectedInterest = row.type === 'savings' && depositAmount !== null && interestRate !== null && termMonths !== null
+    ? Math.round(depositAmount * (interestRate / 100) * (termMonths / 12))
+    : null
+  const pnl = row.type === 'savings'
+    ? expectedInterest
+    : costBasis !== null && row.type !== 'debt'
+      ? row.currentValue - costBasis
+      : null
+  const pnlPercent = pnl !== null && costBasis && costBasis > 0 ? Math.round((pnl / costBasis) * 1000) / 10 : null
+  const originalAmount = row.type === 'debt' ? numberValue(metadata.originalAmount) : null
+  const paidAmount = originalAmount !== null ? Math.max(0, originalAmount - row.currentValue) : null
+  const progressPercent = row.type === 'debt' && originalAmount && originalAmount > 0
+    ? Math.min(100, Math.round((paidAmount! / originalAmount) * 100))
+    : row.type === 'savings' && startDate && termMonths && termMonths > 0
+      ? Math.min(100, Math.max(0, Math.round(((Date.now() - new Date(`${startDate}T00:00:00`).getTime()) / (termMonths * 30.4375 * 24 * 60 * 60 * 1000)) * 100)))
+      : null
+
+  return {
+    ...row,
+    type: row.type as AssetType,
+    label: TYPE_LABELS[row.type] ?? row.type,
+    institution: typeof metadata.bankName === 'string' ? metadata.bankName : null,
+    address: typeof metadata.address === 'string' ? metadata.address : null,
+    ticker: typeof metadata.ticker === 'string' ? metadata.ticker : null,
+    quantity,
+    unit: row.type === 'gold' && (metadata.unit === 'phan' || metadata.unit === 'chi' || metadata.unit === 'luong') ? metadata.unit : null,
+    costBasis,
+    pnl,
+    pnlPercent,
+    interestRate,
+    termMonths,
+    startDate,
+    maturityDate: addMonths(startDate, termMonths),
+    expectedInterest,
+    originalAmount,
+    paidAmount,
+    progressPercent,
+  }
+}
+
+function buildAssetOverviewGroups(items: AssetOverviewItem[]): AssetOverviewGroup[] {
+  const byType = new Map<AssetType, AssetOverviewItem[]>()
+  for (const item of items) byType.set(item.type, [...(byType.get(item.type) ?? []), item])
+
+  return ASSET_TYPE_ORDER.filter((type) => byType.has(type)).map((type) => {
+    const groupItems = byType.get(type)!
+    const totalValue = groupItems.reduce((sum, item) => sum + item.currentValue, 0) * (type === 'debt' ? -1 : 1)
+    const pnlValues = groupItems.map((item) => item.pnl).filter((value): value is number => value !== null)
+    const costBasis = groupItems.reduce((sum, item) => sum + (item.costBasis ?? 0), 0)
+    const pnl = pnlValues.length > 0 ? pnlValues.reduce((sum, value) => sum + value, 0) : null
+    return {
+      type,
+      label: TYPE_LABELS[type] ?? type,
+      count: groupItems.length,
+      totalValue,
+      pnl,
+      pnlPercent: pnl !== null && costBasis > 0 ? Math.round((pnl / costBasis) * 1000) / 10 : null,
+      expectedInterest: groupItems.reduce((sum, item) => sum + (item.expectedInterest ?? 0), 0) || null,
+      items: groupItems.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    }
+  })
+}
+
+export function getAssetOverview(authUserId: string): AssetOverview {
+  const profileId = getProfileId(authUserId)
+  const profile = getProfileSettings(authUserId)
+  const rows = db.select().from(assets).where(eq(assets.userId, profileId)).orderBy(desc(assets.updatedAt)).all()
+  const netWorthData = getNetWorth(authUserId)
+  const history = getNetWorthHistory(authUserId, 24)
+  const previousPoint = history.length > 0 ? history[history.length - 1] : null
+  const netWorthDelta = previousPoint ? netWorthData.netWorth - previousPoint.netWorth : null
+  const items = rows.map(buildAssetOverviewItem)
+  const investmentPnl = items.reduce((sum, item) => sum + (item.pnl ?? 0), 0)
+  return {
+    netWorth: netWorthData.netWorth,
+    goldPricePerLuong: profile.goldPricePerLuong,
+    previousNetWorth: previousPoint?.netWorth ?? null,
+    netWorthDelta,
+    netWorthDeltaPercent: netWorthDelta !== null && previousPoint?.netWorth ? Math.round((netWorthDelta / Math.abs(previousPoint.netWorth)) * 1000) / 10 : null,
+    totalAssets: netWorthData.totalAssets,
+    totalDebt: netWorthData.totalDebt,
+    investmentPnl,
+    allocation: netWorthData.byType,
+    history,
+    groups: buildAssetOverviewGroups(items),
+  }
+}
+
+export function revalueAssets(authUserId: string): AssetOverview {
+  const profile = getProfileSettings(authUserId)
+  if (profile.goldPricePerLuong === null || profile.goldPricePerLuong <= 0) {
+    throw Object.assign(new Error('Chưa cấu hình giá 1 lượng vàng'), { status: 400 })
+  }
+  revalueGoldAssetsForProfile(profile.id, profile.goldPricePerLuong)
+  return getAssetOverview(authUserId)
 }
 
 /**

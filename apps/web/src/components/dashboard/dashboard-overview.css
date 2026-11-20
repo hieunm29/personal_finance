@@ -1,0 +1,371 @@
+.db-card.db-overview-net-worth {
+  position: relative;
+  overflow: hidden;
+  min-height: 280px;
+  padding: 24px;
+  color: #fff;
+  border: 0;
+  background: radial-gradient(120% 140% at 100% 0%, #6366f1 0%, #4338ca 48%, #312e81 100%);
+}
+
+.db-overview-net-worth-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.db-overview-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c7d2fe;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.db-overview-net-worth-value {
+  margin: 6px 0 4px;
+  color: #fff;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-overview-delta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 14%);
+  color: #e0e7ff;
+  font-size: 12px;
+}
+
+.db-overview-delta strong {
+  color: #6ee7b7;
+  font-weight: 600;
+}
+
+.db-overview-delta-negative strong {
+  color: #fecaca;
+}
+
+.db-overview-net-worth-spark {
+  width: min(300px, 45%);
+  height: 80px;
+  opacity: 0.92;
+}
+
+.db-overview-allocation {
+  margin-top: 22px;
+}
+
+.db-overview-allocation-bar {
+  display: flex;
+  height: 10px;
+  gap: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 14%);
+}
+
+.db-overview-allocation-bar span {
+  display: block;
+  min-width: 2px;
+  height: 100%;
+  background: #a5b4fc;
+}
+
+.db-overview-allocation-bar span:nth-child(2n) { background: #fcd34d; }
+.db-overview-allocation-bar span:nth-child(3n) { background: #6ee7b7; }
+.db-overview-allocation-bar span:nth-child(4n) { background: #f9a8d4; }
+
+.db-overview-allocation-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.db-overview-allocation-item {
+  min-width: 0;
+  color: #c7d2fe;
+  font-size: 12px;
+}
+
+.db-overview-allocation-item > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-overview-allocation-item strong {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-overview-allocation-item .db-swatch {
+  background: #a5b4fc;
+}
+
+.db-overview-allocation-item:nth-child(2n) .db-swatch { background: #fcd34d; }
+.db-overview-allocation-item:nth-child(3n) .db-swatch { background: #6ee7b7; }
+.db-overview-allocation-item:nth-child(4n) .db-swatch { background: #f9a8d4; }
+
+.db-overview-net-worth-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(255 255 255 / 16%);
+}
+
+.db-overview-net-worth-stats span {
+  display: block;
+  color: #c7d2fe;
+  font-size: 12px;
+}
+
+.db-overview-net-worth-stats strong {
+  display: block;
+  margin-top: 2px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-empty.db-overview-empty-on-dark {
+  color: #c7d2fe;
+}
+
+.db-link.db-overview-assets-link {
+  align-self: flex-start;
+  color: #e0e7ff;
+}
+
+.db-overview-unavailable {
+  display: flex;
+  min-height: 230px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.db-overview-unavailable strong {
+  font-size: 20px;
+}
+
+.db-overview-unavailable p {
+  margin: 0;
+}
+
+.db-card.db-overview-loading {
+  min-height: 280px;
+  background: linear-gradient(110deg, #e2e8f0 8%, #f8fafc 18%, #e2e8f0 33%);
+  background-size: 200% 100%;
+  animation: db-overview-shimmer 1.4s linear infinite;
+}
+
+.db-overview-health {
+  min-width: 0;
+}
+
+.db-overview-health-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+
+.db-overview-ring {
+  position: relative;
+  width: 132px;
+  height: 132px;
+}
+
+.db-overview-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.db-overview-ring-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.db-overview-ring-center strong {
+  display: block;
+  color: #0f172a;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.db-overview-ring-center span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.db-overview-health-metrics {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.db-overview-metric-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.db-overview-metric-top b {
+  color: #0f172a;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-overview-health .db-bar {
+  height: 8px;
+}
+
+.db-overview-health .db-bar > span {
+  background: #4f46e5;
+}
+
+.db-overview-hint {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.db-overview-danger-text {
+  color: #dc2626 !important;
+}
+
+.db-overview-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.db-overview-kpi {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.db-overview-kpi-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.db-overview-kpi-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.db-overview-kpi-icon-income { color: #059669; background: #ecfdf5; }
+.db-overview-kpi-icon-expense { color: #dc2626; background: #fef2f2; }
+.db-overview-kpi-icon-info { color: #2563eb; background: #eff6ff; }
+.db-overview-kpi-icon-brand { color: #4f46e5; background: #eef2ff; }
+
+.db-overview-kpi-value {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-overview-kpi-value-positive { color: #059669; }
+.db-overview-kpi-value-negative { color: #dc2626; }
+
+.db-overview-kpi-foot {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.db-overview-kpi-foot .db-card-sub {
+  flex: 1 1 60px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.db-overview-sparkline {
+  width: 84px;
+  max-width: 84px;
+  flex: 0 1 84px;
+  height: 28px;
+  margin-left: auto;
+  overflow: visible;
+}
+
+@keyframes db-overview-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (max-width: 1100px) {
+  .db-overview-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1250px) and (min-width: 1101px) {
+  .db-overview-kpi-foot { gap: 5px; }
+  .db-overview-sparkline { width: 60px; max-width: 60px; flex-basis: 60px; }
+}
+
+@media (max-width: 760px) {
+  .db-overview-net-worth-top { flex-direction: column; }
+  .db-overview-net-worth-spark { width: 100%; max-width: 300px; }
+  .db-overview-allocation-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .db-overview-health-grid { grid-template-columns: 1fr; justify-items: center; }
+  .db-overview-health-metrics { width: 100%; }
+}
+
+@media (max-width: 560px) {
+  .db-overview-kpis { grid-template-columns: 1fr; }
+  .db-card.db-overview-net-worth { padding: 20px; }
+  .db-overview-net-worth-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .db-overview-net-worth-stats > :last-child { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .db-card.db-overview-loading { animation: none; }
+}

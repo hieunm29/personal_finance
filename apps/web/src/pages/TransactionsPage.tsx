@@ -1,360 +1,361 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { TransactionFilter, TransactionWithRelations } from '@pf/shared'
-import { useTransactions, useDeleteTransaction } from '../hooks/useTransactions'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
+import { QUERY_KEYS, type Asset, type CategoryType, type TransactionFilter, type TransactionWithRelations, type UserProfile, type Wallet } from '@pf/shared'
+import { apiClient } from '../services/apiClient'
+import {
+  useDeleteTransaction,
+  useExportTransactions,
+  useInfiniteTransactions,
+  useTransaction,
+  useTransactionAnalytics,
+} from '../hooks/useTransactions'
+import { useAssets } from '../hooks/useAssets'
+import { useBudgetProgress } from '../hooks/useBudget'
+import { useCategories } from '../hooks/useCategories'
+import { useWallets } from '../hooks/useWallets'
 import TransactionForm from '../components/transaction/TransactionForm'
-import DeleteTransactionDialog from '../components/transaction/DeleteTransactionDialog'
-import TransactionSearch from '../components/transaction/TransactionSearch'
-import TransactionFilters from '../components/transaction/TransactionFilters'
+import TransactionCategoryIcon from '../components/transaction/TransactionCategoryIcon'
+import DashboardIcon from '../components/dashboard/DashboardIcon'
 import { formatCurrency, formatDate } from '../utils/format'
+import './transactions.css'
 
-// ─── Helpers ─────────────────────────────────────────────────
+const PAGE_SIZE = 8
 
-function groupByDate(
-  txns: TransactionWithRelations[],
-): [string, TransactionWithRelations[]][] {
-  const map = new Map<string, TransactionWithRelations[]>()
-  for (const txn of txns) {
-    if (!map.has(txn.date)) map.set(txn.date, [])
-    map.get(txn.date)!.push(txn)
+type PageFilters = TransactionFilter & { walletIds?: string }
+
+interface AnalyticsLike {
+  totalIncome: number
+  totalExpense: number
+  incomeCount: number
+  expenseCount: number
+  netAmount: number
+  prevNetAmount: number
+  dailyExpenses: { date: string; amount: number }[]
+  dailyTotals?: { date: string; income: number; expense: number; netAmount: number }[]
+  categories: { categoryId: string | null; categoryName: string; categoryColor: string | null; categoryIcon: string | null; amount: number; percentage: number }[]
+  total: number
+}
+
+interface WalletOption {
+  id: string
+  name: string
+  kind: 'wallet' | 'asset'
+  color?: string
+}
+
+function monthString(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function monthRange(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  return { dateFrom: `${month}-01`, dateTo: new Date(year, monthNumber, 0).toLocaleDateString('sv') }
+}
+
+function isIsoDate(value: string | null): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00`)
+  const normalized = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return !Number.isNaN(date.getTime()) && normalized === value
+}
+
+function buildDefaultFilters(month = monthString()): PageFilters {
+  return { ...monthRange(month), page: 1, limit: PAGE_SIZE }
+}
+
+function parseInitialFilters(search: string): PageFilters {
+  const params = new URLSearchParams(search)
+  const initialDateFrom = params.get('dateFrom')
+  const month = isIsoDate(initialDateFrom) ? initialDateFrom.slice(0, 7) : monthString()
+  const filters: PageFilters = { ...buildDefaultFilters(month) }
+  const stringKeys = ['type', 'categoryId', 'search', 'walletIds'] as const
+  for (const key of stringKeys) {
+    const value = params.get(key)
+    if (value) (filters as Record<string, unknown>)[key] = value
   }
-  return Array.from(map.entries())
+  if (isIsoDate(params.get('dateFrom'))) filters.dateFrom = params.get('dateFrom') as string
+  if (isIsoDate(params.get('dateTo'))) filters.dateTo = params.get('dateTo') as string
+  const amountFrom = params.get('amountFrom')
+  const amountTo = params.get('amountTo')
+  if (amountFrom && /^\d+$/.test(amountFrom)) filters.amountFrom = Number(amountFrom)
+  if (amountTo && /^\d+$/.test(amountTo)) filters.amountTo = Number(amountTo)
+  return filters
 }
 
-function countActiveFilters(f: TransactionFilter): number {
-  let n = 0
-  if (f.type) n++
-  if (f.categoryId) n++
-  if (f.dateFrom) n++
-  if (f.dateTo) n++
-  if (f.amountFrom !== undefined) n++
-  if (f.amountTo !== undefined) n++
-  return n
+function getEnvelopeData<T>(value: unknown): T | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  if ('data' in value) return (value as { data?: T }).data
+  return value as T
 }
 
-// ─── Category icon: colored circle + first letter ─────────────
-function CategoryIcon({ name, color }: { name: string; color: string | null }) {
-  return (
-    <span
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-      style={{ backgroundColor: color ?? '#6b7280' }}
-    >
-      {name.charAt(0).toUpperCase()}
-    </span>
-  )
+function TransactionIcon({ txn, size = 20 }: { txn: TransactionWithRelations; size?: number }) {
+  if (!txn.category?.icon && txn.type === 'income') return <span aria-hidden="true">↓</span>
+  if (!txn.category?.icon && txn.type === 'transfer') return <span aria-hidden="true">⇄</span>
+  return <TransactionCategoryIcon icon={txn.category?.icon} name={txn.category?.name} size={size} color="currentColor" />
 }
 
-// ─── Transaction row ─────────────────────────────────────────
-function TransactionRow({
-  txn,
-  onEdit,
-  onDelete,
-}: {
-  txn: TransactionWithRelations
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const isIncome = txn.type === 'income'
-  const amountStr = `${isIncome ? '+' : '−'} ${formatCurrency(txn.amount)}`
-  const cat = txn.category as (typeof txn.category & { name: string; color: string | null }) | null
-
-  return (
-    <div className="group flex items-center gap-1">
-      <button
-        type="button"
-        onClick={onEdit}
-        className="flex flex-1 items-center gap-3 py-3 text-left transition-colors hover:bg-gray-50"
-      >
-        <CategoryIcon name={cat?.name ?? '?'} color={cat?.color ?? null} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-900">{cat?.name ?? '—'}</p>
-          <p className="text-xs text-gray-400">
-            {(txn.wallet as { name: string } | null)?.name ?? (txn.asset as { name: string } | null)?.name ?? '—'}
-            {txn.note ? ` · ${txn.note}` : ''}
-          </p>
-        </div>
-        <span
-          className={`shrink-0 text-sm font-semibold tabular-nums ${
-            isIncome ? 'text-green-600' : 'text-red-500'
-          }`}
-        >
-          {amountStr}
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label="Xóa giao dịch"
-        className="shrink-0 rounded-md p-1.5 text-gray-300 opacity-0 transition-all hover:text-red-500 group-hover:opacity-100"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-          <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
-        </svg>
-      </button>
-    </div>
-  )
+function dateHeading(date: string): string {
+  const target = new Date(`${date}T00:00:00`)
+  const now = new Date()
+  const dayDiff = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - target.getTime()) / 86_400_000)
+  if (dayDiff === 0) return 'Hôm nay'
+  if (dayDiff === 1) return 'Hôm qua'
+  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(target)
 }
 
-// ─── Skeleton loader ─────────────────────────────────────────
-function SkeletonList() {
-  return (
-    <div className="space-y-3">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="flex items-center gap-3 rounded-lg bg-white px-4 py-3 shadow-sm">
-          <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-gray-200" />
-          <div className="flex-1 space-y-1.5">
-            <div className="h-3.5 w-28 animate-pulse rounded bg-gray-200" />
-            <div className="h-3 w-20 animate-pulse rounded bg-gray-100" />
-          </div>
-          <div className="h-3.5 w-20 animate-pulse rounded bg-gray-200" />
-        </div>
-      ))}
-    </div>
-  )
+function formatLongDate(date: string): string {
+  return new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${date}T00:00:00`))
 }
 
-// ─── Modal ───────────────────────────────────────────────────
-function Modal({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean
-  onClose: () => void
-  title: string
-  children: React.ReactNode
-}) {
-  if (!open) return null
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-lg rounded-xl bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="max-h-[80vh] overflow-y-auto px-6 py-4">{children}</div>
-      </div>
-    </div>
-  )
+function parseDisplayAmount(value: string): number | undefined {
+  const parsed = Number(value.replace(/[^\d]/g, ''))
+  return parsed > 0 ? parsed * 100 : undefined
 }
 
-// ─── Page ────────────────────────────────────────────────────
-function buildDefaultFilters(): TransactionFilter {
+function displayAmount(cents?: number): string {
+  return cents ? Math.round(cents / 100).toLocaleString('vi-VN') : ''
+}
+
+function activeFilterCount(filters: PageFilters, month: string): number {
+  let count = 0
+  if (filters.type) count++
+  if (filters.categoryId) count++
+  if (filters.walletIds) count++
+  if (filters.amountFrom !== undefined) count++
+  if (filters.amountTo !== undefined) count++
+  if (filters.dateFrom !== monthRange(month).dateFrom || filters.dateTo !== monthRange(month).dateTo) count++
+  return count
+}
+
+function IconButton({ label, children, onClick }: { label: string; children: React.ReactNode; onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void }) {
+  return <button type="button" className="tx-icon-button" aria-label={label} onClick={onClick}>{children}</button>
+}
+
+function StatCard({ tone, icon, label, value, footer }: { tone: string; icon: string; label: string; value: string; footer: React.ReactNode }) {
+  return <article className="tx-stat-card"><div className={`tx-stat-icon ${tone}`}>{icon}</div><div className="tx-stat-label">{label}</div><div className={`tx-stat-value ${tone}`}>{value}</div><div className="tx-stat-footer">{footer}</div></article>
+}
+
+function DailyChart({ month, points, currency, onSelect }: { month: string; points: { date: string; amount: number }[]; currency: string; onSelect: (date: string) => void }) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const days = new Date(year, monthNumber, 0).getDate()
+  const byDate = new Map(points.map((point) => [point.date, point.amount]))
+  const values = Array.from({ length: days }, (_, index) => byDate.get(`${month}-${String(index + 1).padStart(2, '0')}`) ?? 0)
+  const max = Math.max(...values, 1)
   const today = new Date()
-  const dateFrom = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('sv')
-  const dateTo = new Date(today.getFullYear(), today.getMonth() + 1, 0).toLocaleDateString('sv')
-  return { page: 1, limit: 20, dateFrom, dateTo }
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === monthNumber
+  const highestIndex = values.indexOf(Math.max(...values))
+  const highest = values[highestIndex] ?? 0
+  return <article className="tx-daily-card">
+    <div className="tx-card-head"><div><h2>Chi tiêu theo ngày</h2><p>Nhấn vào cột để lọc theo ngày</p></div>{highest > 0 && <span className="tx-badge neutral">Cao nhất: {String(highestIndex + 1).padStart(2, '0')}/{String(monthNumber).padStart(2, '0')} · {formatCurrency(highest, currency)}</span>}</div>
+    <div className="tx-daily-bars" role="group" aria-label={`Biểu đồ chi tiêu từng ngày tháng ${monthNumber}`}>
+      {values.map((amount, index) => {
+        const date = `${month}-${String(index + 1).padStart(2, '0')}`
+        const future = isCurrentMonth && index + 1 > today.getDate()
+        const isToday = isCurrentMonth && index + 1 === today.getDate()
+        return <button key={date} type="button" className={`tx-daily-bar ${amount >= max * .75 ? 'big' : ''} ${future ? 'future' : ''} ${isToday ? 'today' : ''}`} style={{ height: `${Math.max((amount / max) * 100, amount ? 4 : 2)}%` }} aria-label={`${date}: ${formatCurrency(amount, currency)}`} onClick={() => onSelect(date)} />
+      })}
+    </div>
+    <div className="tx-daily-axis"><span>01/{String(monthNumber).padStart(2, '0')}</span><span>10/{String(monthNumber).padStart(2, '0')}</span><span>20/{String(monthNumber).padStart(2, '0')}</span><span>{days}/{String(monthNumber).padStart(2, '0')}</span></div>
+  </article>
 }
 
-const DEFAULT_FILTERS = buildDefaultFilters()
+function TransactionRow({ txn, currency, selected, onSelect, onEdit, onDelete }: { txn: TransactionWithRelations; currency: string; selected: boolean; onSelect: () => void; onEdit: () => void; onDelete: () => void }) {
+  const isIncome = txn.type === 'income'
+  const isTransfer = txn.type === 'transfer'
+  const accountLabel = isTransfer ? `${txn.wallet?.name ?? txn.asset?.name ?? '—'} → ${txn.toWallet?.name ?? '—'}` : txn.wallet?.name ?? txn.asset?.name ?? '—'
+  return <div className={`tx-row ${selected ? 'selected' : ''}`}>
+    <button type="button" className="tx-row-select" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
+    <span className={`tx-row-icon ${isIncome ? 'income' : isTransfer ? 'transfer' : 'expense'}`}><TransactionIcon txn={txn} /></span>
+    <div className="tx-row-body"><div className="tx-row-name">{txn.note || txn.category?.name || 'Giao dịch'}</div><div className="tx-row-meta"><span>{txn.category?.name ?? 'Không phân loại'}</span><i /> <span>{accountLabel}</span>{txn.isRecurring && <span className="tx-tag">↻ Định kỳ</span>}</div></div>
+    <span className={`tx-row-amount ${isIncome ? 'income' : isTransfer ? 'transfer' : ''}`}>{isIncome ? '+' : isTransfer ? '' : '−'}{formatCurrency(txn.amount, currency)}</span>
+    </button>
+    <div className="tx-row-actions">{!isTransfer && <IconButton label="Sửa" onClick={(event) => { event?.stopPropagation?.(); onEdit() }}>✎</IconButton>}<IconButton label="Xóa" onClick={(event) => { event?.stopPropagation?.(); onDelete() }}>⌫</IconButton></div>
+  </div>
+}
+
+function Dialog({ open, title, onClose, children, className = '', bare = false }: { open: boolean; title?: string; onClose: () => void; children: React.ReactNode; className?: string; bare?: boolean }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = ref.current
+    if (!dialog || !open) return
+    if (!dialog.open) dialog.showModal()
+    return () => { if (dialog.open) dialog.close() }
+  }, [open])
+  if (!open) return null
+  return <dialog ref={ref} className={`tx-dialog ${className}`} aria-label={title ?? 'Biểu mẫu giao dịch'} aria-labelledby={title && !bare ? 'tx-dialog-title' : undefined} onCancel={(event) => { event.preventDefault(); onClose() }} onClick={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className={`tx-dialog-panel ${bare ? 'tx-dialog-panel-bare' : ''}`}>{bare ? children : <><header><h2 id="tx-dialog-title">{title}</h2><IconButton label="Đóng" onClick={onClose}>×</IconButton></header><div className="tx-dialog-body">{children}</div></>}</div>
+  </dialog>
+}
 
 export default function TransactionsPage() {
-  const [filters, setFilters] = useState<TransactionFilter>(DEFAULT_FILTERS)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [filters, setFilters] = useState<PageFilters>(() => parseInitialFilters(location.search))
+  const [month, setMonth] = useState(() => (parseInitialFilters(location.search).dateFrom ?? monthRange(monthString()).dateFrom).slice(0, 7))
   const [showFilters, setShowFilters] = useState(false)
-  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
+  const [searchInput, setSearchInput] = useState(() => parseInitialFilters(location.search).search ?? '')
+  const [createOpen, setCreateOpen] = useState(location.pathname === '/transactions/new')
   const [editTx, setEditTx] = useState<TransactionWithRelations | null>(null)
   const [deleteTx, setDeleteTx] = useState<TransactionWithRelations | null>(null)
+  const updateFilters = useCallback((patch: Partial<PageFilters>) => setFilters((current) => ({ ...current, ...patch, page: 1 })), [])
 
-  const { data, isLoading } = useTransactions(filters)
+  const queryFilters = filters as TransactionFilter
+  const infinite = useInfiniteTransactions(queryFilters)
+  const analyticsQuery = useTransactionAnalytics(queryFilters)
+  const fullMonthAnalyticsQuery = useTransactionAnalytics({ ...filters, ...monthRange(month) } as TransactionFilter)
+  const exportMutation = useExportTransactions()
   const deleteMutation = useDeleteTransaction()
+  const { data: walletsData } = useWallets()
+  const { data: assetsData } = useAssets()
+  const categoryType = filters.type === 'income' || filters.type === 'expense' ? filters.type as CategoryType : undefined
+  const { data: categoriesData } = useCategories(categoryType)
+  const { data: profileData } = useQuery({ queryKey: QUERY_KEYS.profile, queryFn: () => apiClient<{ data: UserProfile }>('/settings/profile') })
+  const routeEditId = location.pathname.match(/^\/transactions\/([^/]+)\/edit$/)?.[1] ?? null
+  const { data: routeEditData } = useTransaction(routeEditId)
+  const transactions = useMemo(() => infinite.data?.pages.flatMap((page) => page.data) ?? [], [infinite.data])
+  const lastPage = infinite.data?.pages[infinite.data.pages.length - 1]
+  const meta = lastPage?.meta
+  const analytics = getEnvelopeData<AnalyticsLike>(analyticsQuery.data)
+  const fullMonthAnalytics = getEnvelopeData<AnalyticsLike>(fullMonthAnalyticsQuery.data)
+  const currency = profileData?.data?.currency ?? 'VND'
+  const options = useMemo<WalletOption[]>(() => [
+    ...(walletsData?.data ?? []).map((wallet: Wallet) => ({ id: wallet.id, name: wallet.name, kind: 'wallet' as const })),
+    ...(assetsData?.data ?? []).filter((asset: Asset) => asset.type === 'bank').map((asset: Asset) => ({ id: `asset-${asset.id}`, name: asset.name, kind: 'asset' as const })),
+  ], [walletsData?.data, assetsData?.data])
+  const selectedWalletIds = useMemo(() => new Set((filters.walletIds ?? '').split(',').filter(Boolean)), [filters.walletIds])
+  const selected = transactions.find((txn) => txn.id === selectedId) ?? (routeEditData?.data as TransactionWithRelations | undefined) ?? null
+  const selectedMonth = (selected?.date ?? editTx?.date)?.slice(0, 7) ?? ''
+  const { data: budgetProgressData } = useBudgetProgress(selectedMonth)
+  const groups = useMemo(() => {
+    const map = new Map<string, TransactionWithRelations[]>()
+    for (const transaction of transactions) map.set(transaction.date, [...(map.get(transaction.date) ?? []), transaction])
+    return Array.from(map.entries())
+  }, [transactions])
+  const filterCount = activeFilterCount(filters, month)
 
-  const grouped = useMemo(() => groupByDate(data?.data ?? []), [data?.data])
-  const meta = data?.meta
-  const isEmpty = !isLoading && (data?.data.length ?? 0) === 0
-  const activeFilterCount = countActiveFilters(filters)
+  const initialSelectionDone = useRef(false)
 
-  const handleSearch = useCallback(
-    (search: string) => setFilters((f) => ({ ...f, search: search || undefined, page: 1 })),
-    [],
-  )
+  useEffect(() => {
+    const next = parseInitialFilters(location.search)
+    setFilters(next)
+    setMonth((next.dateFrom ?? monthRange(monthString()).dateFrom).slice(0, 7))
+    setSearchInput(next.search ?? '')
+    setSelectedId(null)
+    setMobileDetailOpen(false)
+    initialSelectionDone.current = false
+  }, [location.search])
 
-  const handleFiltersChange = useCallback((next: TransactionFilter) => setFilters(next), [])
+  useEffect(() => {
+    setCreateOpen(location.pathname === '/transactions/new')
+  }, [location.pathname])
 
-  const handleCreated = () => {
-    setCreateModalOpen(false)
-    setFilters(DEFAULT_FILTERS)
-  }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey || target?.closest('dialog') || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName ?? '')) return
+      event.preventDefault()
+      searchInputRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
-  const handleUpdated = () => setEditTx(null)
+  useEffect(() => {
+    if (!initialSelectionDone.current && transactions[0]) {
+      setSelectedId(transactions[0].id)
+      initialSelectionDone.current = true
+    }
+  }, [transactions])
 
-  const handleDeleteConfirm = async () => {
+  useEffect(() => {
+    const timer = window.setTimeout(() => updateFilters({ search: searchInput || undefined }), 300)
+    return () => window.clearTimeout(timer)
+  }, [searchInput, updateFilters])
+
+  useEffect(() => {
+    if (routeEditId) setEditTx(routeEditData?.data as TransactionWithRelations | null)
+  }, [routeEditId, routeEditData?.data])
+
+  const setMonthFilter = (nextMonth: string) => { if (!/^\d{4}-\d{2}$/.test(nextMonth)) return; setMonth(nextMonth); updateFilters(monthRange(nextMonth)) }
+  const clearFilters = () => { setSearchInput(''); setFilters(buildDefaultFilters(month)); setShowFilters(false) }
+  const closeCreate = () => { setCreateOpen(false); if (location.pathname !== '/transactions') navigate(`/transactions${location.search}`, { replace: true }) }
+  const closeEdit = () => { setEditTx(null); if (routeEditId) navigate(`/transactions${location.search}`, { replace: true }) }
+  const handleDelete = async () => {
     if (!deleteTx) return
-    await deleteMutation.mutateAsync(deleteTx.id)
-    setDeleteTx(null)
+    try {
+      await deleteMutation.mutateAsync(deleteTx.id)
+      if (selectedId === deleteTx.id) { setSelectedId(null); setMobileDetailOpen(false) }
+      setDeleteTx(null)
+    } catch {
+      // The mutation error is rendered in the confirmation dialog.
+    }
   }
+  const handleExport = async () => { try { await exportMutation.mutateAsync(queryFilters) } catch { /* rendered below */ } }
+  const toggleWallet = (id: string) => { const next = new Set(selectedWalletIds); if (next.has(id)) next.delete(id); else next.add(id); updateFilters({ walletIds: Array.from(next).join(',') || undefined }) }
+  const selectTransaction = (txn: TransactionWithRelations) => { setSelectedId(txn.id); setMobileDetailOpen(window.matchMedia('(max-width: 860px)').matches) }
+  const dailyPoints = fullMonthAnalytics?.dailyExpenses ?? []
+  const summaryIncome = analytics?.totalIncome ?? meta?.totalIncome ?? 0
+  const summaryExpense = analytics?.totalExpense ?? meta?.totalExpense ?? 0
+  const summaryNet = analytics?.netAmount ?? summaryIncome - summaryExpense
+  const prevNet = analytics?.prevNetAmount ?? 0
+  const summaryStart = new Date(`${filters.dateFrom ?? monthRange(month).dateFrom}T00:00:00`)
+  const requestedEnd = new Date(`${filters.dateTo ?? monthRange(month).dateTo}T00:00:00`)
+  const today = new Date(`${new Date().toLocaleDateString('sv')}T00:00:00`)
+  const summaryEnd = requestedEnd > today && summaryStart <= today ? today : requestedEnd
+  const summaryDays = Math.max(Math.round((summaryEnd.getTime() - summaryStart.getTime()) / 86_400_000) + 1, 1)
 
-  const page = filters.page ?? 1
+  const chips = [
+    filters.search ? { key: 'search', label: `Tìm: ${filters.search}`, remove: () => setSearchInput('') } : null,
+    filters.type ? { key: 'type', label: filters.type === 'income' ? 'Thu nhập' : filters.type === 'expense' ? 'Chi tiêu' : 'Chuyển khoản', remove: () => updateFilters({ type: undefined }) } : null,
+    filters.categoryId ? { key: 'category', label: categoriesData?.data.find((category) => category.id === filters.categoryId)?.name ?? 'Danh mục', remove: () => updateFilters({ categoryId: undefined }) } : null,
+    filters.walletIds ? { key: 'wallet', label: `Ví: ${Array.from(selectedWalletIds).map((id) => options.find((option) => option.id === id)?.name ?? id).join(', ')}`, remove: () => updateFilters({ walletIds: undefined }) } : null,
+    filters.amountFrom !== undefined ? { key: 'amountFrom', label: `Từ ${formatCurrency(filters.amountFrom, currency)}`, remove: () => updateFilters({ amountFrom: undefined }) } : null,
+    filters.amountTo !== undefined ? { key: 'amountTo', label: `Đến ${formatCurrency(filters.amountTo, currency)}`, remove: () => updateFilters({ amountTo: undefined }) } : null,
+    (filters.dateFrom !== monthRange(month).dateFrom || filters.dateTo !== monthRange(month).dateTo) ? { key: 'date', label: `${filters.dateFrom ?? '…'} – ${filters.dateTo ?? '…'}`, remove: () => updateFilters(monthRange(month)) } : null,
+  ].filter(Boolean) as { key: string; label: string; remove: () => void }[]
 
-  return (
-    <div className="space-y-4">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Giao dịch</h1>
-        <button
-          onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark"
-        >
-          <span className="text-base leading-none">+</span>
-          <span>Giao dịch mới</span>
-        </button>
-      </div>
+  return <div className="tx-page">
+    <header className="tx-page-header"><div><h1>Giao dịch</h1><p>Ghi nhận, tìm kiếm và quản lý mọi khoản thu chi</p></div><div className="tx-page-actions"><label className="tx-month-select" data-month={`Tháng ${Number(month.slice(5))}/${month.slice(0, 4)}`}><DashboardIcon name="calendar" size={17} /><span className="sr-only">Tháng đang xem</span><input type="month" value={month} onChange={(event) => setMonthFilter(event.target.value)} aria-label="Chọn tháng" /><span aria-hidden="true">⌄</span></label><button type="button" className="tx-button" onClick={handleExport} disabled={exportMutation.isPending}>⇩ <span>{exportMutation.isPending ? 'Đang xuất…' : 'Xuất'}</span></button><button type="button" className="tx-button primary" onClick={() => setCreateOpen(true)}><DashboardIcon name="plus" size={17} /><span>Thêm giao dịch</span></button></div></header>
 
-      {/* Search + filter toggle */}
-      <div className="flex gap-2">
-        <TransactionSearch value={filters.search ?? ''} onSearch={handleSearch} />
-        <button
-          type="button"
-          onClick={() => setShowFilters((v) => !v)}
-          className={`relative flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors ${
-            showFilters || activeFilterCount > 0
-              ? 'border-primary bg-primary/5 text-primary'
-              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-            <path fillRule="evenodd" d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 01.628.74v2.288a2.25 2.25 0 01-.659 1.59l-4.682 4.683a2.25 2.25 0 00-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 018 18.25v-5.757a2.25 2.25 0 00-.659-1.591L2.659 6.22A2.25 2.25 0 012 4.629V2.34a.75.75 0 01.628-.74z" clipRule="evenodd" />
-          </svg>
-          <span>Bộ lọc</span>
-          {activeFilterCount > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-      </div>
+    <section className="tx-summary" aria-label="Tổng hợp">
+      <StatCard tone="income" icon="↓" label="Tổng thu" value={`+${formatCurrency(summaryIncome, currency)}`} footer={`${analytics?.incomeCount ?? '—'} giao dịch`} />
+      <StatCard tone="expense" icon="↑" label="Tổng chi" value={`−${formatCurrency(summaryExpense, currency)}`} footer={`${analytics?.expenseCount ?? '—'} giao dịch · TB ${summaryExpense ? formatCurrency(Math.round(summaryExpense / Math.max(summaryDays, 1)), currency) : formatCurrency(0, currency)}/ngày`} />
+      <StatCard tone="net" icon="⚖" label="Chênh lệch" value={`${summaryNet >= 0 ? '+' : '−'}${formatCurrency(Math.abs(summaryNet), currency)}`} footer={<><span className={`tx-change ${summaryNet >= prevNet ? 'good' : 'bad'}`}>{summaryNet >= prevNet ? '↗' : '↘'} {prevNet ? `${Math.abs(((summaryNet - prevNet) / Math.abs(prevNet)) * 100).toFixed(1)}%` : '—'}</span> so với kỳ trước</>} />
+      <DailyChart month={month} points={dailyPoints} currency={currency} onSelect={(date) => updateFilters({ dateFrom: date, dateTo: date })} />
+    </section>
+    {(analyticsQuery.isError || fullMonthAnalyticsQuery.isError) && <div className="tx-error-state tx-analytics-error"><p>Không thể tải số liệu phân tích.</p><button type="button" className="tx-button" onClick={() => { void analyticsQuery.refetch(); void fullMonthAnalyticsQuery.refetch() }}>Thử lại</button></div>}
 
-      {/* Filter panel */}
-      {showFilters && (
-        <TransactionFilters filters={filters} onChange={handleFiltersChange} defaultFilters={DEFAULT_FILTERS} />
-      )}
+    <section className="tx-filter-card" aria-label="Tìm kiếm và bộ lọc"><div className="tx-toolbar"><div className="tx-search"><span aria-hidden="true">⌕</span><input ref={searchInputRef} type="search" value={filters.search ?? ''} onChange={(event) => updateFilters({ search: event.target.value || undefined })} placeholder="Tìm theo ghi chú, danh mục, số tiền…" aria-label="Tìm kiếm giao dịch" /><kbd>/</kbd></div><div className="tx-segment" role="tablist" aria-label="Loại giao dịch">{(['', 'expense', 'income'] as const).map((type) => <button key={type || 'all'} type="button" role="tab" aria-selected={(filters.type ?? '') === type} className={(filters.type ?? '') === type ? 'on' : ''} onClick={() => updateFilters({ type: type || undefined, categoryId: undefined })}>{type === '' ? 'Tất cả' : type === 'expense' ? '● Chi tiêu' : '● Thu nhập'}</button>)}</div><button type="button" className={`tx-button filter ${showFilters || filterCount ? 'active' : ''}`} onClick={() => setShowFilters((value) => !value)}>⌯ Bộ lọc {filterCount > 0 && <span>{filterCount}</span>}</button></div>{showFilters && <div className="tx-filter-panel"><label><span>Danh mục</span><select value={filters.categoryId ?? ''} onChange={(event) => updateFilters({ categoryId: event.target.value || undefined })}><option value="">Tất cả danh mục</option>{categoriesData?.data.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><div className="tx-wallet-field"><span>Ví / Tài khoản</span><button type="button" className="tx-select" onClick={() => setWalletMenuOpen((value) => !value)}>{selectedWalletIds.size ? `${selectedWalletIds.size} ví đã chọn` : 'Tất cả ví'} <span>⌄</span></button>{walletMenuOpen && <div className="tx-wallet-menu">{options.map((option) => <label key={option.id}><input type="checkbox" checked={selectedWalletIds.has(option.id)} onChange={() => toggleWallet(option.id)} />{option.name}<small>{option.kind === 'asset' ? 'Tài sản' : 'Ví'}</small></label>)}</div>}</div><label><span>Từ ngày</span><input type="date" value={filters.dateFrom ?? ''} onChange={(event) => updateFilters({ dateFrom: event.target.value || undefined })} /></label><label><span>Đến ngày</span><input type="date" value={filters.dateTo ?? ''} onChange={(event) => updateFilters({ dateTo: event.target.value || undefined })} /></label><label><span>Từ số tiền</span><input inputMode="numeric" value={displayAmount(filters.amountFrom)} onChange={(event) => updateFilters({ amountFrom: parseDisplayAmount(event.target.value) })} placeholder="0" /></label><label><span>Đến số tiền</span><input inputMode="numeric" value={displayAmount(filters.amountTo)} onChange={(event) => updateFilters({ amountTo: parseDisplayAmount(event.target.value) })} placeholder="∞" /></label></div>}<div className="tx-chips">{chips.map((chip) => <span className="tx-chip" key={chip.key}>{chip.label}<button type="button" onClick={chip.remove} aria-label={`Bỏ lọc ${chip.label}`}>×</button></span>)}{chips.length > 0 && <button type="button" className="tx-clear" onClick={clearFilters}>Xoá bộ lọc</button>}<span className="tx-result-count">Hiển thị <b>{analytics?.total ?? meta?.total ?? 0}</b> giao dịch</span></div></section>
 
-      {/* Summary bar */}
-      {meta && (meta.totalIncome > 0 || meta.totalExpense > 0) && (
-        <div className="flex gap-4 rounded-lg bg-white px-4 py-3 shadow-sm text-sm">
-          <span className="text-gray-500">
-            Thu: <span className="font-semibold text-green-600">{formatCurrency(meta.totalIncome)}</span>
-          </span>
-          <span className="text-gray-300">|</span>
-          <span className="text-gray-500">
-            Chi: <span className="font-semibold text-red-500">{formatCurrency(meta.totalExpense)}</span>
-          </span>
-          {meta.total > 0 && (
-            <>
-              <span className="text-gray-300">|</span>
-              <span className="text-gray-400">{meta.total} giao dịch</span>
-            </>
-          )}
-        </div>
-      )}
+    <section className="tx-split"><article className="tx-list-card" aria-label="Danh sách giao dịch">{infinite.isLoading ? <Skeleton /> : infinite.isError ? <div className="tx-error-state"><p>Không thể tải danh sách giao dịch.</p><button type="button" className="tx-button" onClick={() => infinite.refetch()}>Thử lại</button></div> : groups.length === 0 ? <div className="tx-empty">{filters.search || filterCount ? 'Không tìm thấy giao dịch nào phù hợp.' : 'Chưa có giao dịch nào. Nhấn “Thêm giao dịch” để bắt đầu.'}</div> : <>{groups.map(([date, rows]) => { const income = rows.filter((row) => row.type === 'income').reduce((sum, row) => sum + row.amount, 0); const expense = rows.filter((row) => row.type === 'expense').reduce((sum, row) => sum + row.amount, 0); const net = analytics?.dailyTotals?.find(day => day.date === date)?.netAmount ?? income - expense; return <div className="tx-day" key={date}><div className="tx-day-head"><span><b>{dateHeading(date)}</b><small>{formatDate(date)}</small></span><strong className={net >= 0 ? 'income' : 'expense'}>{net >= 0 ? '+' : '−'}{formatCurrency(Math.abs(net), currency)}</strong></div>{rows.map((txn) => <TransactionRow key={txn.id} txn={txn} currency={currency} selected={selectedId === txn.id} onSelect={() => selectTransaction(txn)} onEdit={() => txn.type !== 'transfer' && setEditTx(txn)} onDelete={() => setDeleteTx(txn)} />)}</div>})}<div className="tx-list-foot"><span>Đang hiển thị {transactions.length} / {analytics?.total ?? meta?.total ?? transactions.length} giao dịch</span>{infinite.hasNextPage && <button type="button" className="tx-button" onClick={() => infinite.fetchNextPage()} disabled={infinite.isFetchingNextPage}>{infinite.isFetchingNextPage ? 'Đang tải…' : 'Tải thêm⌄'}</button>}</div></>}</article><aside className="tx-side"><TransactionDetail txn={selected} currency={currency} budget={budgetProgressData?.data ?? null} onClose={() => setSelectedId(null)} onEdit={() => selected && selected.type !== 'transfer' && setEditTx(selected)} onDelete={() => selected && setDeleteTx(selected)} onCategorySelect={() => selected?.categoryId && updateFilters({ categoryId: selected.categoryId })} /><CategorySummary categories={analytics?.categories ?? []} currency={currency} onSelect={(categoryId) => updateFilters({ categoryId })} /></aside></section>
 
-      {/* List */}
-      {isLoading ? (
-        <SkeletonList />
-      ) : isEmpty ? (
-        <div className="rounded-lg bg-white p-12 text-center shadow-sm">
-          <p className="text-sm text-gray-400">
-            {activeFilterCount > 0 || filters.search
-              ? 'Không tìm thấy giao dịch nào phù hợp.'
-              : 'Chưa có giao dịch nào. Nhấn + để thêm mới.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {grouped.map(([date, txns]) => (
-            <div key={date} className="overflow-hidden rounded-lg bg-white shadow-sm">
-              {/* Date header */}
-              <div className="border-b border-gray-50 bg-gray-50 px-4 py-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  {formatDate(date)}
-                </span>
-              </div>
-              {/* Rows */}
-              <div className="divide-y divide-gray-50 px-4">
-                {txns.map((txn) => (
-                  <TransactionRow
-                    key={txn.id}
-                    txn={txn}
-                    onEdit={() => setEditTx(txn)}
-                    onDelete={() => setDeleteTx(txn)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+    {selected && <Dialog open={mobileDetailOpen} title="Chi tiết giao dịch" onClose={() => setMobileDetailOpen(false)} className="tx-mobile-detail" bare><div className="tx-mobile-detail-panel"><TransactionDetail txn={selected} currency={currency} budget={budgetProgressData?.data ?? null} onClose={() => setMobileDetailOpen(false)} onEdit={() => selected.type !== 'transfer' && setEditTx(selected)} onDelete={() => setDeleteTx(selected)} onCategorySelect={() => selected.categoryId && updateFilters({ categoryId: selected.categoryId })} /></div></Dialog>}
+    <button type="button" className="tx-fab" onClick={() => setCreateOpen(true)} aria-label="Thêm giao dịch">＋</button>
 
-      {/* Pagination */}
-      {meta && meta.totalPages > 1 && (
-        <div className="flex items-center justify-between rounded-lg bg-white px-4 py-3 shadow-sm">
-          <button
-            onClick={() => setFilters((f) => ({ ...f, page: Math.max(1, (f.page ?? 1) - 1) }))}
-            disabled={page === 1}
-            className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ← Trước
-          </button>
-          <span className="text-sm text-gray-500">
-            Trang {page} / {meta.totalPages}
-          </span>
-          <button
-            onClick={() => setFilters((f) => ({ ...f, page: Math.min(meta.totalPages, (f.page ?? 1) + 1) }))}
-            disabled={page === meta.totalPages}
-            className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Tiếp →
-          </button>
-        </div>
-      )}
+    <Dialog open={createOpen} onClose={closeCreate} className="tx-form-dialog" bare><TransactionForm mode="create" variant="redesigned" onSuccess={closeCreate} onSaveAndContinue={() => undefined} onCancel={closeCreate} /></Dialog>
+    <Dialog open={!!editTx} onClose={closeEdit} className="tx-form-dialog" bare>{editTx && <TransactionForm mode="edit" variant="redesigned" transactionId={editTx.id} defaultValues={{ type: editTx.type as 'income' | 'expense', amount: editTx.amount, categoryId: editTx.categoryId, walletId: editTx.walletId ?? (editTx.assetId ? `asset-${editTx.assetId}` : ''), date: editTx.date, note: editTx.note ?? '', isRecurring: editTx.isRecurring, recurrenceInterval: editTx.recurrenceInterval ?? undefined }} onSuccess={closeEdit} onSaveAndContinue={() => undefined} onCancel={closeEdit} />}</Dialog>
+    <Dialog open={!!deleteTx} title="Xóa giao dịch" onClose={() => !deleteMutation.isPending && setDeleteTx(null)} className="tx-delete-dialog"><p>Bạn có chắc muốn xóa giao dịch này? Hành động này không thể hoàn tác.</p>{deleteMutation.error && <p className="tx-error">{deleteMutation.error.message}</p>}<div className="tx-dialog-actions"><button type="button" className="tx-button" onClick={() => setDeleteTx(null)} disabled={deleteMutation.isPending}>Hủy</button><button type="button" className="tx-button danger" onClick={handleDelete} disabled={deleteMutation.isPending}>{deleteMutation.isPending ? 'Đang xóa…' : 'Xóa'}</button></div></Dialog>
+    {exportMutation.error && <p className="tx-error tx-export-error">{exportMutation.error.message}</p>}
+  </div>
+}
 
-      {/* Modal tạo giao dịch */}
-      <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="Thêm giao dịch mới">
-        <TransactionForm
-          mode="create"
-          onSuccess={handleCreated}
-          onCancel={() => setCreateModalOpen(false)}
-        />
-      </Modal>
+function Skeleton() { return <div className="tx-skeleton-list">{Array.from({ length: 6 }, (_, index) => <div key={index} className="tx-skeleton-row"><i /><span /><b /></div>)}</div> }
 
-      {/* Modal chỉnh sửa giao dịch */}
-      <Modal open={!!editTx} onClose={() => setEditTx(null)} title="Chỉnh sửa giao dịch">
-        {editTx && (
-          <TransactionForm
-            mode="edit"
-            transactionId={editTx.id}
-            defaultValues={{
-              type: editTx.type as 'income' | 'expense',
-              amount: editTx.amount,
-              categoryId: editTx.categoryId,
-              walletId: editTx.walletId,
-              date: editTx.date,
-              note: editTx.note ?? '',
-            }}
-            onSuccess={handleUpdated}
-            onCancel={() => setEditTx(null)}
-          />
-        )}
-      </Modal>
+function CategorySummary({ categories, currency, onSelect }: { categories: AnalyticsLike['categories']; currency: string; onSelect: (categoryId: string) => void }) {
+  if (categories.length === 0) return null
+  return <article className="tx-category-summary"><div className="tx-card-head"><div><h2>Theo danh mục</h2><p>Trong kết quả đang lọc</p></div></div><ul>{categories.slice().sort((a, b) => b.amount - a.amount).map((category) => <li key={category.categoryId ?? `uncategorized-${category.categoryName}`}><button type="button" className="tx-category-summary-item" disabled={!category.categoryId} onClick={() => category.categoryId && onSelect(category.categoryId)} aria-label={category.categoryId ? `Lọc giao dịch theo ${category.categoryName}` : `${category.categoryName}, không thể lọc theo danh mục`}><span className="tx-category-summary-icon" style={{ color: category.categoryColor ?? '#64748b', background: `${category.categoryColor ?? '#94a3b8'}18` }}><TransactionCategoryIcon icon={category.categoryIcon} name={category.categoryName} size={17} /></span><span className="tx-category-summary-main"><strong>{category.categoryName}</strong><span className="tx-category-summary-bar"><i style={{ width: `${Math.min(Math.max(category.percentage, 0), 100)}%`, background: category.categoryColor ?? '#4f46e5' }} /></span></span><span className="tx-category-summary-value">{formatCurrency(category.amount, currency)}</span></button></li>)}</ul></article>
+}
 
-      {/* Modal xác nhận xóa */}
-      <Modal open={!!deleteTx} onClose={() => setDeleteTx(null)} title="Xóa giao dịch">
-        <DeleteTransactionDialog
-          onConfirm={handleDeleteConfirm}
-          onCancel={() => setDeleteTx(null)}
-          isPending={deleteMutation.isPending}
-        />
-      </Modal>
-    </div>
-  )
+function TransactionDetail({ txn, currency, budget, onClose, onEdit, onDelete, onCategorySelect }: { txn: TransactionWithRelations | null; currency: string; budget: { categories?: { categoryId: string; category?: { name?: string; color?: string | null }; spent: number; limitAmount: number; percentage: number }[] } | null; onClose: () => void; onEdit: () => void; onDelete: () => void; onCategorySelect?: () => void }) {
+  if (!txn) return <article className="tx-detail-card tx-detail-empty"><p>Chọn một giao dịch để xem chi tiết</p></article>
+  const isIncome = txn.type === 'income'
+  const isTransfer = txn.type === 'transfer'
+  const accountLabel = isTransfer ? `${txn.wallet?.name ?? txn.asset?.name ?? '—'} → ${txn.toWallet?.name ?? '—'}` : txn.wallet?.name ?? txn.asset?.name ?? '—'
+  const budgetItem = budget?.categories?.find((item) => item.categoryId === txn.categoryId)
+  return <article className="tx-detail-card" aria-label="Chi tiết giao dịch"><div className="tx-card-head"><h2>Chi tiết giao dịch</h2><IconButton label="Đóng chi tiết" onClick={onClose}>×</IconButton></div><div className="tx-detail-top"><span className={`tx-detail-icon ${isIncome ? 'income' : isTransfer ? 'transfer' : 'expense'}`}><TransactionIcon txn={txn} size={26} /></span><div><div className={`tx-detail-amount ${isIncome ? 'income' : isTransfer ? 'transfer' : 'expense'}`}>{isIncome ? '+' : isTransfer ? '' : '−'}{formatCurrency(txn.amount, currency)}</div><p>{txn.note || txn.category?.name || 'Giao dịch'}</p></div></div><dl className="tx-detail-list"><dt>Loại</dt><dd><span className={`tx-badge ${isIncome ? 'good' : isTransfer ? 'neutral' : 'bad'}`}>{isIncome ? 'Thu nhập' : isTransfer ? 'Chuyển khoản' : 'Chi tiêu'}</span></dd><dt>Danh mục</dt><dd><button type="button" className="tx-category-link" onClick={onCategorySelect}><i className="tx-color-dot" style={{ background: txn.category?.color ?? '#94a3b8' }} />{txn.category?.name ?? 'Không phân loại'}</button></dd><dt>Ví / Tài khoản</dt><dd>{accountLabel}</dd><dt>Ngày</dt><dd>{formatLongDate(txn.date)}</dd><dt>Ghi chú</dt><dd>{txn.note || '—'}</dd>{budgetItem && <><dt>Ngân sách</dt><dd className="tx-budget-detail"><div className="tx-progress"><span style={{ width: `${Math.min(budgetItem.percentage, 100)}%`, background: budgetItem.percentage >= 100 ? '#dc2626' : budgetItem.percentage >= 80 ? '#d97706' : '#059669' }} /></div><small>{budgetItem.category?.name ?? txn.category?.name} đã dùng {budgetItem.percentage}% ({formatCurrency(budgetItem.spent, currency)} / {formatCurrency(budgetItem.limitAmount, currency)})</small></dd></>}</dl>{!isTransfer && <div className="tx-detail-actions"><button type="button" className="tx-button" onClick={onEdit}>✎ Chỉnh sửa</button><button type="button" className="tx-button danger" onClick={onDelete}>⌫ Xóa</button></div>}{isTransfer && <div className="tx-detail-actions"><button type="button" className="tx-button danger" onClick={onDelete}>⌫ Xóa</button></div>}{!isTransfer && <div className="tx-note-box">ⓘ Không thể đổi loại thu ↔ chi. Hãy xoá và tạo giao dịch mới.</div>}</article>
 }

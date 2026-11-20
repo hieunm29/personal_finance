@@ -1,0 +1,257 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+.db-app {
+  --db-bg: #f6f7fb;
+  --db-surface: #fff;
+  --db-border: #e5e7ef;
+  --db-text: #0f172a;
+  --db-muted: #475569;
+  --db-subtle: #64748b;
+  --db-brand: #4f46e5;
+  --db-brand-soft: #eef2ff;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--db-bg);
+  color: var(--db-text);
+  font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.db-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--db-surface);
+  border-right: 1px solid var(--db-border);
+}
+
+.db-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border-bottom: 1px solid var(--db-border);
+}
+
+.db-brand-logo {
+  display: grid;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+  border-radius: 12px;
+}
+
+.db-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.db-brand-sub {
+  margin-top: 2px;
+  color: var(--db-subtle);
+  font-size: 12px;
+}
+
+.db-nav {
+  flex: 1;
+  padding: 12px;
+}
+
+.db-nav-group + .db-nav-group {
+  margin-top: 8px;
+}
+
+.db-nav-label {
+  padding: 12px 12px 6px;
+  color: var(--db-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.db-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--db-muted);
+  border-radius: 10px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.db-nav-item:hover {
+  color: var(--db-text);
+  background: #f1f5f9;
+}
+
+.db-nav-item[aria-current='page'] {
+  color: var(--db-brand);
+  background: var(--db-brand-soft);
+  font-weight: 600;
+}
+
+.db-nav-item:focus-visible,
+.db-logout:focus-visible,
+.db-mobile-toggle:focus-visible {
+  outline: 2px solid var(--db-brand);
+  outline-offset: 2px;
+}
+
+.db-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.db-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 20px;
+  border-top: 1px solid var(--db-border);
+}
+
+.db-avatar {
+  display: grid;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: #fff;
+  background: var(--db-brand);
+  border-radius: 50%;
+  font-weight: 600;
+}
+
+.db-user-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.db-user-name,
+.db-user-mail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-user-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.db-user-mail {
+  color: var(--db-subtle);
+  font-size: 12px;
+}
+
+.db-logout {
+  display: grid;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  color: var(--db-subtle);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.db-logout:hover {
+  color: var(--db-text);
+  background: #f8fafc;
+  border-color: var(--db-border);
+}
+
+.db-main {
+  min-width: 0;
+  min-height: 100vh;
+  background: var(--db-bg);
+}
+
+.db-main--settings {
+  padding: 24px;
+}
+
+.db-mobile-toggle,
+.db-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .db-app {
+    display: block;
+  }
+
+  .db-sidebar {
+    display: none;
+  }
+
+  .db-sidebar.is-open {
+    position: fixed;
+    inset: 0 auto 0 0;
+    display: flex;
+    width: min(280px, calc(100vw - 48px));
+    box-shadow: 12px 0 30px rgba(15, 23, 42, 0.16);
+  }
+
+  .db-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.38);
+    border: 0;
+    cursor: pointer;
+  }
+
+  .db-mobile-toggle {
+    position: fixed;
+    top: 14px;
+    left: 16px;
+    z-index: 50;
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    color: var(--db-text);
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid var(--db-border);
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .db-main--settings {
+    padding: 64px 16px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .db-nav-item,
+  .db-logout {
+    transition: none;
+  }
+}

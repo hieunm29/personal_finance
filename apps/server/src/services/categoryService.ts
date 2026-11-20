@@ -1,4 +1,4 @@
-import { eq, and, sql, max } from 'drizzle-orm'
+import { eq, and, sql, max, inArray } from 'drizzle-orm'
 import { db } from '../db'
 import { categories, categoryGroups, userProfiles, transactions } from '../db/schema'
 import type {
@@ -87,6 +87,33 @@ export function updateCategoryGroup(authUserId: string, id: string, data: Update
     .get()!
 }
 
+export function deleteCategoryGroup(authUserId: string, id: string) {
+  const profileId = getProfileId(authUserId)
+  const group = db.select().from(categoryGroups)
+    .where(and(eq(categoryGroups.id, id), eq(categoryGroups.userId, profileId))).get()
+  if (!group) throw Object.assign(new Error('Category group not found'), { status: 404 })
+  if (group.isDefault) throw Object.assign(new Error('Không thể xóa nhóm mặc định'), { status: 400 })
+
+  const category = db.select({ id: categories.id }).from(categories)
+    .where(and(eq(categories.groupId, id), eq(categories.userId, profileId))).get()
+  if (category) {
+    throw Object.assign(new Error('Không thể xóa nhóm đang có danh mục. Hãy chuyển hoặc xóa các danh mục trước.'), { status: 409 })
+  }
+  db.delete(categoryGroups).where(eq(categoryGroups.id, id)).run()
+}
+
+export function reorderCategoryGroups(authUserId: string, items: Array<{ id: string; sortOrder: number }>) {
+  const profileId = getProfileId(authUserId)
+  const ids = items.map((item) => item.id)
+  if (new Set(ids).size !== ids.length) throw Object.assign(new Error('Danh sách thứ tự không hợp lệ'), { status: 400 })
+  const owned = db.select({ id: categoryGroups.id }).from(categoryGroups)
+    .where(and(eq(categoryGroups.userId, profileId), inArray(categoryGroups.id, ids))).all()
+  if (owned.length !== ids.length) throw Object.assign(new Error('Category group not found'), { status: 404 })
+  db.transaction((tx) => {
+    for (const item of items) tx.update(categoryGroups).set({ sortOrder: item.sortOrder }).where(eq(categoryGroups.id, item.id)).run()
+  })
+}
+
 // ─── Categories ─────────────────────────────────────────────
 
 export function getCategories(
@@ -172,6 +199,7 @@ export function createCategory(authUserId: string, data: CreateCategoryInput) {
     .where(and(eq(categoryGroups.id, data.groupId), eq(categoryGroups.userId, profileId)))
     .get()
   if (!group) throw Object.assign(new Error('Category group not found'), { status: 404 })
+  if (group.type !== data.type) throw Object.assign(new Error('Loại danh mục phải khớp với nhóm'), { status: 400 })
 
   // Unique name check (case-insensitive) within group
   const existing = db
@@ -207,6 +235,16 @@ export function updateCategory(authUserId: string, id: string, data: UpdateCateg
     .get()
   if (!category) throw Object.assign(new Error('Category not found'), { status: 404 })
 
+  if (data.name !== undefined) {
+    const duplicate = db.select({ id: categories.id }).from(categories).where(and(
+      eq(categories.userId, profileId),
+      eq(categories.groupId, category.groupId),
+      sql`lower(${categories.name}) = lower(${data.name})`,
+      sql`${categories.id} <> ${id}`,
+    )).get()
+    if (duplicate) throw Object.assign(new Error('Tên danh mục đã tồn tại trong nhóm này'), { status: 409 })
+  }
+
   const updateData: Record<string, unknown> = {}
   if (data.name !== undefined) updateData.name = data.name
   if (data.icon !== undefined) updateData.icon = data.icon
@@ -233,6 +271,31 @@ export function toggleCategoryVisibility(authUserId: string, id: string) {
     .run()
 
   return getCategoryWithGroup(id)!
+}
+
+export function reorderCategories(authUserId: string, items: Array<{ id: string; sortOrder: number }>) {
+  const profileId = getProfileId(authUserId)
+  const ids = items.map((item) => item.id)
+  if (new Set(ids).size !== ids.length) throw Object.assign(new Error('Danh sách thứ tự không hợp lệ'), { status: 400 })
+  const owned = db.select({ id: categories.id }).from(categories)
+    .where(and(eq(categories.userId, profileId), inArray(categories.id, ids))).all()
+  if (owned.length !== ids.length) throw Object.assign(new Error('Category not found'), { status: 404 })
+  db.transaction((tx) => {
+    for (const item of items) tx.update(categories).set({ sortOrder: item.sortOrder }).where(eq(categories.id, item.id)).run()
+  })
+}
+
+export function getCategoryUsage(authUserId: string, id: string) {
+  const profileId = getProfileId(authUserId)
+  const category = db.select({ id: categories.id }).from(categories)
+    .where(and(eq(categories.id, id), eq(categories.userId, profileId))).get()
+  if (!category) throw Object.assign(new Error('Category not found'), { status: 404 })
+  const result = db.select({
+    transactionCount: sql<number>`count(*)`,
+    totalAmount: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+  }).from(transactions)
+    .where(and(eq(transactions.userId, profileId), eq(transactions.categoryId, id))).get()
+  return { transactionCount: result?.transactionCount ?? 0, totalAmount: result?.totalAmount ?? 0 }
 }
 
 export function getTransactionCountByCategory(authUserId: string, categoryId: string): number {
@@ -274,6 +337,7 @@ export function deleteCategory(
       .where(and(eq(categories.id, replacementCategoryId), eq(categories.userId, profileId)))
       .get()
     if (!replacement) throw Object.assign(new Error('Replacement category not found'), { status: 404 })
+    if (replacement.type !== category.type) throw Object.assign(new Error('Danh mục thay thế phải cùng loại giao dịch'), { status: 400 })
 
     // Re-assign transactions
     db.update(transactions)

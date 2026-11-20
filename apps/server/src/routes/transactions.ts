@@ -4,6 +4,7 @@ import {
   createTransactionSchema,
   updateTransactionSchema,
   transactionFilterSchema,
+  transactionAnalyticsFilterSchema,
 } from '@pf/shared'
 import {
   createTransaction,
@@ -11,11 +12,28 @@ import {
   getTransactionById,
   updateTransaction,
   deleteTransaction,
+  getTransactionAnalytics,
+  exportTransactions,
 } from '../services/transactionService'
 
 type Variables = { userId: string }
 
 const transactions = new Hono<{ Variables: Variables }>()
+
+transactions.get('/analytics', zValidator('query', transactionAnalyticsFilterSchema), (c) => {
+  const data = getTransactionAnalytics(c.get('userId'), c.req.valid('query'))
+  return c.json({ data })
+})
+
+transactions.get('/export', zValidator('query', transactionAnalyticsFilterSchema), (c) => {
+  const csv = exportTransactions(c.get('userId'), c.req.valid('query'))
+  const date = new Date().toLocaleDateString('sv')
+  return c.body(csv, 200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': `attachment; filename="personal-finance_${date}.csv"`,
+    'Cache-Control': 'no-store',
+  })
+})
 
 transactions.get('/', zValidator('query', transactionFilterSchema), (c) => {
   const filters = c.req.valid('query')

@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tài sản — Personal Finance (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F6F7FB;
+    --surface: #FFFFFF;
+    --border: #E5E7EF;
+    --text: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --brand: #4F46E5;
+    --brand-soft: #EEF2FF;
+    --income: #059669;
+    --income-soft: #ECFDF5;
+    --expense: #DC2626;
+    --expense-soft: #FEF2F2;
+    --warn: #D97706;
+    --warn-soft: #FFFBEB;
+    --info: #2563EB;
+    --info-soft: #EFF6FF;
+    --radius: 16px;
+    --shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 16px rgba(15,23,42,.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .sm { width: 14px !important; height: 14px !important; }
+
+  /* ── Layout chung ─────────────────────── */
+  .app { display: grid; grid-template-columns: 248px minmax(0,1fr); min-height: 100vh; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 20px; border-bottom: 1px solid var(--border); }
+  .brand-logo { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #6366F1, #4338CA); color: #fff; }
+  .brand-name { font-weight: 700; font-size: 15px; }
+  .brand-sub { font-size: 12px; color: var(--subtle); }
+  .nav { padding: 12px; flex: 1; }
+  .nav-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--subtle); padding: 12px 12px 6px; }
+  .nav a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; font-weight: 500; cursor: pointer; transition: background-color .2s, color .2s; }
+  .nav a:hover { background: #F1F5F9; color: var(--text); }
+  .nav a.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .user { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--border); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; font-weight: 600; }
+  .user-name { font-weight: 600; font-size: 13px; }
+  .user-mail { font-size: 12px; color: var(--subtle); }
+
+  .main { min-width: 0; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 32px; background: rgba(246,247,251,.85); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--border); }
+  .greet h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+  .greet p { color: var(--subtle); font-size: 13px; }
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; transition: background-color .2s, border-color .2s, color .2s; white-space: nowrap; }
+  .btn:hover { background: #F8FAFC; border-color: #CBD5E1; }
+  .btn-icon { width: 40px; padding: 0; position: relative; }
+  .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .btn-primary:hover { background: #4338CA; border-color: #4338CA; }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn-ghost:hover { background: #F1F5F9; border-color: transparent; color: var(--text); }
+  .btn-danger { color: var(--expense); }
+  .btn-danger:hover { background: var(--expense-soft); border-color: #FECACA; }
+  .count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; }
+
+  .content { padding: 24px 32px 48px; max-width: 1360px; display: grid; gap: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; min-width: 0; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .card-sub { font-size: 12px; color: var(--subtle); }
+  .badge { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .badge.good { background: var(--income-soft); color: var(--income); }
+  .badge.bad { background: var(--expense-soft); color: var(--expense); }
+  .badge.neutral { background: #F1F5F9; color: var(--muted); }
+  .badge.brand { background: var(--brand-soft); color: var(--brand); }
+  .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  .bar { height: 8px; background: #EEF0F5; border-radius: 999px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; border-radius: 999px; }
+
+  .stat-ico { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
+
+
+  /* Màu theo loại tài sản */
+  :root { --t-cash: #10B981; --t-gold: #F59E0B; --t-stock: #6366F1; --t-save: #06B6D4; --t-debt: #EF4444; --t-re: #EC4899; }
+
+  /* ── Hero ─────────────────────────────── */
+  .row-hero { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.35fr); gap: 20px; }
+  .hero { grid-column: 1 / -1; background: radial-gradient(120% 160% at 100% 0%, #6366F1 0%, #4338CA 45%, #312E81 100%); color: #fff; border: none; padding: 24px; display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); gap: 24px; align-items: center; }
+  .hero .label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #C7D2FE; font-weight: 500; }
+  .hero .value { font-size: 40px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 8px; color: #6EE7B7; }
+  .hero .delta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; background: rgba(255,255,255,.14); padding: 4px 10px; border-radius: 999px; }
+  .hero .delta b { color: #6EE7B7; font-weight: 600; }
+  .hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+  .hero-stats div { padding: 14px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); font-size: 12px; color: #C7D2FE; }
+  .hero-stats strong { display: block; color: #fff; font-size: 16px; font-weight: 600; margin-top: 4px; }
+  .hero-stats .pos { color: #6EE7B7; }
+  .hero-stats .neg { color: #FCA5A5; }
+
+  /* ── Charts ───────────────────────────── */
+  .row-charts { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.6fr); gap: 20px; }
+  .donut-wrap { display: flex; align-items: center; gap: 22px; }
+  .donut { position: relative; width: 150px; height: 150px; flex-shrink: 0; }
+  .donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .donut-center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .donut-center strong { font-size: 16px; font-weight: 700; display: block; }
+  .donut-center span { font-size: 11px; color: var(--subtle); }
+  .alloc { list-style: none; display: grid; gap: 4px; flex: 1; min-width: 0; }
+  .alloc li { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 7px 8px; margin: 0 -8px; border-radius: 8px; font-size: 13px; cursor: pointer; transition: background-color .2s; }
+  .alloc li:hover { background: #F8FAFC; }
+  .alloc .nm { color: var(--muted); }
+  .alloc .v { font-weight: 600; text-align: right; }
+  .alloc .v small { display: block; font-size: 11px; color: var(--subtle); font-weight: 400; }
+  .seg { display: inline-flex; background: #F1F5F9; border-radius: 10px; padding: 3px; }
+  .seg button { white-space: nowrap; border: 0; background: transparent; font: inherit; font-size: 12px; font-weight: 500; color: var(--muted); padding: 6px 10px; border-radius: 8px; cursor: pointer; transition: background-color .2s, color .2s; }
+  .seg button.on { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart text { font-family: inherit; font-size: 11px; fill: var(--subtle); }
+
+  /* ── Asset groups ─────────────────────── */
+  .type-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .type-chip { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 6px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; white-space: nowrap; transition: background-color .2s, border-color .2s, color .2s; }
+  .type-chip:hover { border-color: #CBD5E1; color: var(--text); }
+  .type-chip.on { background: var(--text); border-color: var(--text); color: #fff; }
+  .type-chip .ti { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; }
+  .type-chip .ti svg { width: 15px; height: 15px; }
+  .type-chip b { font-weight: 600; }
+  .type-chip.on .ti { background: rgba(255,255,255,.15) !important; color: #fff !important; }
+
+  .group { padding: 0; overflow: hidden; }
+  .g-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .g-ico { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+  .g-title { font-weight: 700; font-size: 15px; }
+  .g-sub { font-size: 12px; color: var(--subtle); }
+  .g-spacer { flex: 1; }
+  .g-total { text-align: right; }
+  .g-total b { display: block; font-size: 16px; font-weight: 700; }
+  .g-total span { font-size: 12px; color: var(--subtle); }
+  .g-total span.pos { color: var(--income); font-weight: 600; }
+  .price-pill { display: inline-flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 12px; background: var(--warn-soft); border: 1px solid #FDE68A; font-size: 12px; color: #92400E; }
+  .price-pill b { font-size: 13px; color: var(--text); }
+  .price-pill .btn { height: 30px; padding: 0 10px; font-size: 12px; border-color: #FCD34D; }
+
+  .tbl { width: 100%; border-collapse: collapse; }
+  .tbl th { text-align: right; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--subtle); padding: 10px 20px 8px; background: #FAFBFD; border-bottom: 1px solid #F0F2F7; white-space: nowrap; }
+  .tbl th:first-child { text-align: left; }
+  .tbl td { padding: 14px 20px; border-bottom: 1px solid #F3F4F8; text-align: right; font-size: 13px; white-space: nowrap; vertical-align: middle; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl td:first-child { text-align: left; white-space: normal; }
+  .tbl tbody tr { transition: background-color .2s; }
+  .tbl tbody tr:hover { background: #F8FAFC; }
+  .asset { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .a-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; font-weight: 700; font-size: 12px; letter-spacing: .02em; }
+  .a-name { font-weight: 600; font-size: 14px; }
+  .a-meta { font-size: 12px; color: var(--subtle); }
+  .val { font-weight: 700; font-size: 14px; }
+  .pl { font-weight: 600; }
+  .pl small { display: block; font-weight: 500; font-size: 11px; }
+  .pos { color: var(--income); } .neg { color: var(--expense); }
+  .acts { display: inline-flex; gap: 2px; }
+  .icon-btn { width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--subtle); display: grid; place-items: center; cursor: pointer; transition: background-color .2s, color .2s; }
+  .icon-btn:hover { background: #EEF0F5; color: var(--text); }
+  .icon-btn.del:hover { background: var(--expense-soft); color: var(--expense); }
+  .icon-btn.upd { color: var(--brand); }
+  .icon-btn.upd:hover { background: var(--brand-soft); }
+  .term { min-width: 160px; }
+  .term .bar { height: 6px; margin-bottom: 4px; }
+  .term .t { font-size: 11px; color: var(--subtle); display: flex; justify-content: space-between; gap: 8px; }
+  .due { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+  .empty-row { display: flex; align-items: center; gap: 14px; padding: 18px 20px; color: var(--muted); font-size: 13px; }
+  .empty-row .g-ico { opacity: .35; }
+  .empty-row .link { margin-left: auto; }
+  .link { color: var(--brand); font-weight: 500; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  .link:hover { text-decoration: underline; }
+  .scroll-x { overflow-x: auto; }
+
+  /* ── Modal ────────────────────────────── */
+  .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(3px); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 50; overflow-y: auto; }
+  .overlay.open { display: flex; }
+  .modal { width: 100%; max-width: 600px; background: var(--surface); border-radius: 20px; box-shadow: 0 24px 64px rgba(15,23,42,.25); overflow: hidden; }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); }
+  .modal-head h2 { font-size: 17px; font-weight: 700; }
+  .modal-body { padding: 20px 24px; display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; }
+  .modal-foot { display: flex; align-items: center; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border); background: #FAFBFD; }
+  .modal-foot .note { margin-right: auto; font-size: 12px; color: var(--subtle); }
+  .types { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; }
+  .type-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 1.5px solid var(--border); border-radius: 12px; background: #fff; font: inherit; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; transition: border-color .2s, background-color .2s, color .2s; }
+  .type-opt:hover { border-color: #CBD5E1; }
+  .type-opt .ti { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; }
+  .type-opt.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+  .type-opt[disabled] { opacity: .45; cursor: not-allowed; }
+  .f label, .f .lbl { display: flex; align-items: baseline; gap: 4px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .f label small, .f .lbl small { font-weight: 400; color: var(--subtle); margin-left: auto; }
+  .req { color: var(--expense); }
+  .input { width: 100%; height: 44px; border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; font: inherit; color: var(--text); background: #fff; transition: border-color .2s, box-shadow .2s; }
+  .input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+  .input[readonly] { background: #F8FAFC; color: var(--muted); }
+  .input.upper { text-transform: uppercase; font-weight: 600; letter-spacing: .04em; }
+  .with-unit { position: relative; }
+  .with-unit .input { padding-right: 40px; font-variant-numeric: tabular-nums; }
+  .with-unit span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--subtle); }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+  .units { display: grid; grid-template-columns: repeat(3, 1fr); background: #EEF0F5; padding: 3px; border-radius: 10px; height: 44px; }
+  .units button { border: 0; background: transparent; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; }
+  .units button.on { background: #fff; color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .chips button.on { background: var(--brand-soft); border-color: #C7D2FE; color: var(--brand); font-weight: 600; }
+  .calc { padding: 14px 16px; border-radius: 14px; background: linear-gradient(135deg, #F5F7FF, #FAFBFF); border: 1px solid #C7D2FE; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; align-items: center; }
+  .calc .l { font-size: 12px; color: var(--muted); }
+  .calc .big { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+  .calc .r { text-align: right; }
+  .calc .formula { grid-column: 1 / -1; font-size: 12px; color: var(--subtle); border-top: 1px dashed #C7D2FE; padding-top: 8px; margin-top: 4px; }
+  .hint { font-size: 12px; color: var(--subtle); margin-top: 6px; }
+  .tf { display: none; }
+  .tf.show { display: grid; gap: 16px; grid-template-columns: minmax(0,1fr); }
+
+  .mockup-note { font-size: 12px; color: var(--subtle); text-align: center; }
+  .mockup-note a { color: var(--brand); }
+
+  /* ── Responsive ───────────────────────── */
+  @media (max-width: 1100px) {
+    .hero { grid-template-columns: minmax(0,1fr); }
+    .row-charts { grid-template-columns: minmax(0,1fr); }
+  }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: minmax(0,1fr); }
+    .sidebar { display: none; }
+    .topbar { padding: 16px; }
+    .content { padding: 16px 16px 48px; }
+    .btn-label { display: none; }
+    .types { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  }
+  @media (max-width: 640px) {
+    .greet p { display: none; }
+    .hero .value { font-size: 30px; }
+    .hero-stats { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+    .hero-stats div:last-child { grid-column: 1 / -1; }
+    .donut-wrap { flex-direction: column; align-items: stretch; }
+    .donut { margin: 0 auto; }
+    .g-head { padding: 14px 16px; }
+    .g-total { order: 3; width: 100%; text-align: left; display: flex; align-items: baseline; gap: 8px; }
+    .g-total b { display: inline; }
+    .price-pill { order: 4; width: 100%; justify-content: space-between; }
+    /* bảng → thẻ trên mobile */
+    .tbl thead { display: none; }
+    .tbl, .tbl tbody, .tbl tr, .tbl td { display: block; width: 100%; }
+    .tbl tr { position: relative; padding: 14px 16px; border-bottom: 1px solid #F3F4F8; }
+    .tbl td { padding: 0; border: 0; text-align: left; }
+    .tbl td[data-l] { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0 3px 52px; }
+    .tbl td[data-l]::before { content: attr(data-l); color: var(--subtle); }
+    .tbl td:first-child { margin-bottom: 6px; padding-right: 80px; }
+    .tbl td.act-cell { position: absolute; top: 14px; right: 12px; width: auto; }
+    .pl small { display: inline; margin-left: 4px; }
+    .term { min-width: 0; }
+    .tbl td.term-cell { display: block; padding: 6px 0 0 52px; }
+    .tbl td.term-cell::before { display: none; }
+    .overlay { padding: 0; align-items: flex-end; }
+    .modal { border-radius: 20px 20px 0 0; }
+    .modal-body { padding: 16px; }
+    .grid3 { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+    .grid2 { grid-template-columns: minmax(0,1fr); }
+    .card-head { flex-wrap: wrap; }
+    .alloc li { padding: 5px 8px; }
+    .modal-foot .note { display: none; }
+    .modal-foot .btn { flex: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- Icon sprite (Lucide) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m7 17 10-10M7 7h10v10"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7v10H7"/></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M3 7h18M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-piggy" viewBox="0 0 24 24"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-food" viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10l-2.7-3.6A2 2 0 0 0 13.7 6H8.3a2 2 0 0 0-1.6.9L4 10l-1.5.6C1.7 11 1 11.7 1 12.6V16c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 17h6"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.7 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.2 6.8a2.8 2.8 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M6 2v2M10 2v2M14 2v2"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 2h3l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M16 8H8M16 12H8M13 16H8"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+  <symbol id="i-pill" viewBox="0 0 24 24"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></symbol>
+  <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/></symbol>
+  <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59C2.6 9.42 2 14.46 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.41-1.41A2 2 0 0 1 9.83 16h4.34a2 2 0 0 1 1.42.59L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.55-.6-6.58-.68-7.26A4 4 0 0 0 17.32 5z"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+  <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-party" viewBox="0 0 24 24"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01M22 8h.01M15 2h.01M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></symbol>
+  <symbol id="i-landmark" viewBox="0 0 24 24"><path d="M3 22h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7M12 2l8 5H4z"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.05Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-banknote" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></symbol>
+  <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ═══ Sidebar ═══ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><svg class="i"><use href="#i-wallet"/></svg></div>
+      <div><div class="brand-name">Personal Finance</div><div class="brand-sub">Quản lý tài chính</div></div>
+    </div>
+    <nav class="nav" aria-label="Điều hướng chính">
+      <div class="nav-label">TỔNG QUAN</div>
+      <a href="dashboard-redesign.html"><svg class="i"><use href="#i-dashboard"/></svg>Dashboard</a>
+      <div class="nav-label">QUẢN LÝ</div>
+      <a href="transactions-redesign.html"><svg class="i"><use href="#i-swap"/></svg>Giao dịch</a>
+      <a href="categories-redesign.html"><svg class="i"><use href="#i-tag"/></svg>Danh mục</a>
+      <a href="budget-redesign.html"><svg class="i"><use href="#i-target"/></svg>Ngân sách</a>
+      <a class="active" href="#" aria-current="page"><svg class="i"><use href="#i-wallet"/></svg>Tài sản</a>
+      <a href="#"><svg class="i"><use href="#i-chart"/></svg>Báo cáo</a>
+      <div class="nav-label">HỆ THỐNG</div>
+      <a href="#"><svg class="i"><use href="#i-settings"/></svg>Cài đặt</a>
+    </nav>
+    <div class="user">
+      <div class="avatar">H</div>
+      <div style="min-width:0;flex:1"><div class="user-name">hieunm29</div><div class="user-mail">hieunm29@gmail.com</div></div>
+      <button class="btn btn-icon" aria-label="Đăng xuất" style="width:34px;height:34px"><svg class="i sm"><use href="#i-logout"/></svg></button>
+    </div>
+  </aside>
+
+  <!-- ═══ Main ═══ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="greet">
+        <h1>Tài sản</h1>
+        <p>Theo dõi giá trị tài sản ròng và hiệu quả đầu tư</p>
+      </div>
+      <div class="actions">
+        <button class="btn"><svg class="i"><use href="#i-refresh"/></svg><span class="btn-label">Cập nhật giá</span></button>
+        <a class="btn btn-primary" href="#add-stock"><svg class="i"><use href="#i-plus"/></svg><span class="btn-label">Thêm tài sản</span></a>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ── Net worth ── -->
+      <section class="row-hero">
+        <article class="card hero" aria-label="Tài sản ròng">
+          <div>
+            <div class="label"><svg class="i sm"><use href="#i-shield"/></svg>Giá trị tài sản ròng</div>
+            <div class="value num">493.700.000 ₫</div>
+            <span class="delta num"><b>▲ +13.200.000 ₫ (+2,7%)</b> so với tháng trước</span>
+          </div>
+          <div class="hero-stats num">
+            <div>Tổng tài sản<strong>535.700.000 ₫</strong></div>
+            <div>Tổng nợ<strong class="neg">−42.000.000 ₫</strong></div>
+            <div>Lãi/lỗ đầu tư<strong class="pos">+41.700.000 ₫</strong></div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ── Charts ── -->
+      <section class="row-charts">
+        <article class="card" aria-label="Phân bổ tài sản">
+          <div class="card-head">
+            <div><div class="card-title">Phân bổ tài sản</div><div class="card-sub">Không tính khoản nợ</div></div>
+          </div>
+          <div class="donut-wrap">
+            <div class="donut" role="img" aria-label="Biểu đồ phân bổ tài sản">
+              <svg viewBox="0 0 140 140">
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#EEF0F5" stroke-width="18"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#F59E0B" stroke-width="18" stroke-dasharray="166.6 339.3"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#6366F1" stroke-width="18" stroke-dasharray="85.5 339.3" stroke-dashoffset="-168.6"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#06B6D4" stroke-width="18" stroke-dasharray="61.4 339.3" stroke-dashoffset="-256.1"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#10B981" stroke-width="18" stroke-dasharray="17.7 339.3" stroke-dashoffset="-319.5"/>
+              </svg>
+              <div class="donut-center"><div><strong class="num">535,7tr</strong><span>tổng tài sản</span></div></div>
+            </div>
+            <ul class="alloc num">
+              <li><span class="sw" style="background:#F59E0B"></span><span class="nm">Vàng</span><span class="v">266,0tr<small>49,7%</small></span></li>
+              <li><span class="sw" style="background:#6366F1"></span><span class="nm">Cổ phiếu</span><span class="v">138,2tr<small>25,8%</small></span></li>
+              <li><span class="sw" style="background:#06B6D4"></span><span class="nm">Tiết kiệm</span><span class="v">100,0tr<small>18,7%</small></span></li>
+              <li><span class="sw" style="background:#10B981"></span><span class="nm">Tiền mặt</span><span class="v">31,5tr<small>5,8%</small></span></li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="card chart" aria-label="Biến động tài sản ròng">
+          <div class="card-head">
+            <div><div class="card-title">Biến động tài sản ròng</div><div class="card-sub num">12 tháng qua: <b class="pos">+98.700.000 ₫ (+25,0%)</b></div></div>
+            <div class="seg" role="tablist"><button role="tab">6 tháng</button><button class="on" role="tab" aria-selected="true">12 tháng</button><button role="tab">Tất cả</button></div>
+          </div>
+          <svg viewBox="0 0 640 210" role="img" aria-label="Biểu đồ tài sản ròng 12 tháng">
+            <defs><linearGradient id="nwf" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6366F1" stop-opacity=".22"/><stop offset="1" stop-color="#6366F1" stop-opacity="0"/></linearGradient></defs>
+            <g stroke="#EEF0F5"><line x1="48" x2="624" y1="16" y2="16"/><line x1="48" x2="624" y1="84.3" y2="84.3"/><line x1="48" x2="624" y1="152.7" y2="152.7"/><line x1="48" x2="624" y1="180" y2="180" stroke="#CBD5E1"/></g>
+            <g text-anchor="end"><text x="40" y="20">500tr</text><text x="40" y="88">450tr</text><text x="40" y="156">400tr</text></g>
+            <path d="M48,159.5 L100.4,148.6 L152.7,139 L205.1,128.1 L257.5,115.8 L309.8,103.5 L362.2,91.2 L414.5,81.6 L466.9,67.9 L519.3,55.6 L571.6,42.6 L624,24.6 L624,180 L48,180Z" fill="url(#nwf)"/>
+            <polyline points="48,159.5 100.4,148.6 152.7,139 205.1,128.1 257.5,115.8 309.8,103.5 362.2,91.2 414.5,81.6 466.9,67.9 519.3,55.6 571.6,42.6 624,24.6" fill="none" stroke="#4F46E5" stroke-width="2.5" stroke-linejoin="round"/>
+            <line x1="571.6" x2="571.6" y1="16" y2="180" stroke="#94A3B8" stroke-dasharray="3 3"/>
+            <circle cx="571.6" cy="42.6" r="5" fill="#fff" stroke="#4F46E5" stroke-width="2.5"/>
+            <circle cx="624" cy="24.6" r="4" fill="#4F46E5"/>
+            <g transform="translate(456,52)">
+              <rect width="104" height="40" rx="8" fill="#0F172A"/>
+              <text x="10" y="16" style="fill:#94A3B8;font-size:10px">Cuối tháng 9/2026</text>
+              <text x="10" y="32" style="fill:#fff;font-size:12px;font-weight:600">480.500.000 ₫</text>
+            </g>
+            <g text-anchor="middle"><text x="48" y="200">T11/25</text><text x="205.1" y="200">T2</text><text x="362.2" y="200">T5</text><text x="519.3" y="200">T8</text><text x="612" y="200" style="fill:#4F46E5;font-weight:600">T10</text></g>
+          </svg>
+        </article>
+      </section>
+
+      <!-- ── Bộ lọc loại tài sản ── -->
+      <section class="type-bar num" role="tablist" aria-label="Lọc theo loại tài sản">
+        <button class="type-chip on" role="tab" aria-selected="true"><span class="ti" style="background:#EEF2FF;color:var(--brand)"><svg class="i"><use href="#i-dashboard"/></svg></span>Tất cả <b>9</b></button>
+        <button class="type-chip" role="tab"><span class="ti" style="background:#ECFDF5;color:var(--t-cash)"><svg class="i"><use href="#i-banknote"/></svg></span>Tiền mặt <b>31,5tr</b></button>
+        <button class="type-chip" role="tab"><span class="ti" style="background:#FFFBEB;color:#D97706"><svg class="i"><use href="#i-coins"/></svg></span>Vàng <b>266tr</b></button>
+        <button class="type-chip" role="tab"><span class="ti" style="background:#EEF2FF;color:var(--t-stock)"><svg class="i"><use href="#i-trend"/></svg></span>Cổ phiếu <b>138,2tr</b></button>
+        <button class="type-chip" role="tab"><span class="ti" style="background:#ECFEFF;color:#0891B2"><svg class="i"><use href="#i-landmark"/></svg></span>Tiết kiệm <b>100tr</b></button>
+        <button class="type-chip" role="tab"><span class="ti" style="background:#FEF2F2;color:var(--t-debt)"><svg class="i"><use href="#i-card"/></svg></span>Nợ <b>−42tr</b></button>
+        <button class="type-chip" role="tab"><span class="ti" style="background:#FDF2F8;color:var(--t-re)"><svg class="i"><use href="#i-home"/></svg></span>BĐS <b>0</b></button>
+      </section>
+
+      <!-- ── Vàng ── -->
+      <article class="card group" aria-label="Vàng">
+        <div class="g-head">
+          <span class="g-ico" style="background:var(--t-gold)"><svg class="i"><use href="#i-coins"/></svg></span>
+          <div><div class="g-title">Vàng</div><div class="g-sub num">2 lô · 1 lượng 9 chỉ</div></div>
+          <span class="g-spacer"></span>
+          <div class="price-pill num"><span>Giá hiện tại<br><b>140.000.000 ₫/lượng</b></span><button class="btn"><svg class="i sm"><use href="#i-refresh"/></svg>Cập nhật</button></div>
+          <div class="g-total num"><b>266.000.000 ₫</b><span class="pos">+35.500.000 ₫ (+15,4%)</span></div>
+        </div>
+        <div class="scroll-x">
+          <table class="tbl num">
+            <thead><tr><th>Lô vàng</th><th>Số lượng</th><th>Giá mua</th><th>Giá trị hiện tại</th><th>Lãi / lỗ</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#FFFBEB;color:#D97706"><svg class="i"><use href="#i-coins"/></svg></span><div><div class="a-name">Nhẫn trơn 9999</div><div class="a-meta">Mua 12/03/2025 · cập nhật 25/10/2026</div></div></div></td>
+                <td data-l="Số lượng">1 lượng</td>
+                <td data-l="Giá mua">118.000.000 ₫</td>
+                <td data-l="Giá trị"><span class="val">140.000.000 ₫</span></td>
+                <td data-l="Lãi / lỗ"><span class="pl pos">+22.000.000 ₫<small>+18,6%</small></span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#FFFBEB;color:#D97706"><svg class="i"><use href="#i-coins"/></svg></span><div><div class="a-name">Vàng miếng SJC</div><div class="a-meta">Mua 05/01/2026 · cập nhật 25/10/2026</div></div></div></td>
+                <td data-l="Số lượng">9 chỉ</td>
+                <td data-l="Giá mua">112.500.000 ₫</td>
+                <td data-l="Giá trị"><span class="val">126.000.000 ₫</span></td>
+                <td data-l="Lãi / lỗ"><span class="pl pos">+13.500.000 ₫<small>+12,0%</small></span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- ── Cổ phiếu ── -->
+      <article class="card group" aria-label="Cổ phiếu">
+        <div class="g-head">
+          <span class="g-ico" style="background:var(--t-stock)"><svg class="i"><use href="#i-trend"/></svg></span>
+          <div><div class="g-title">Cổ phiếu</div><div class="g-sub">2 mã · giá cập nhật 25/10/2026</div></div>
+          <span class="g-spacer"></span>
+          <div class="g-total num"><b>138.200.000 ₫</b><span class="pos">+6.200.000 ₫ (+4,7%)</span></div>
+        </div>
+        <div class="scroll-x">
+          <table class="tbl num">
+            <thead><tr><th>Mã</th><th>Số lượng</th><th>Giá TB</th><th>Giá hiện tại</th><th>Giá trị</th><th>Lãi / lỗ</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#EEF2FF;color:#4F46E5">DCM</span><div><div class="a-name">Phân bón Cà Mau</div><div class="a-meta">HOSE</div></div></div></td>
+                <td data-l="Số lượng">2.000</td>
+                <td data-l="Giá TB">32.000</td>
+                <td data-l="Giá hiện tại">38.500</td>
+                <td data-l="Giá trị"><span class="val">77.000.000 ₫</span></td>
+                <td data-l="Lãi / lỗ"><span class="pl pos">+13.000.000 ₫<small>+20,3%</small></span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn upd" aria-label="Cập nhật giá"><svg class="i sm"><use href="#i-refresh"/></svg></button><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#EEF2FF;color:#4F46E5">VNM</span><div><div class="a-name">Vinamilk</div><div class="a-meta">HOSE</div></div></div></td>
+                <td data-l="Số lượng">1.000</td>
+                <td data-l="Giá TB">68.000</td>
+                <td data-l="Giá hiện tại">61.200</td>
+                <td data-l="Giá trị"><span class="val">61.200.000 ₫</span></td>
+                <td data-l="Lãi / lỗ"><span class="pl neg">−6.800.000 ₫<small>−10,0%</small></span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn upd" aria-label="Cập nhật giá"><svg class="i sm"><use href="#i-refresh"/></svg></button><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- ── Tiết kiệm ── -->
+      <article class="card group" aria-label="Tiết kiệm">
+        <div class="g-head">
+          <span class="g-ico" style="background:var(--t-save)"><svg class="i"><use href="#i-landmark"/></svg></span>
+          <div><div class="g-title">Tiết kiệm</div><div class="g-sub">1 sổ · 1 sắp đáo hạn</div></div>
+          <span class="g-spacer"></span>
+          <div class="g-total num"><b>100.000.000 ₫</b><span>Lãi dự kiến +6.200.000 ₫</span></div>
+        </div>
+        <div class="scroll-x">
+          <table class="tbl num">
+            <thead><tr><th>Sổ tiết kiệm</th><th>Lãi suất</th><th style="text-align:left">Kỳ hạn</th><th>Tiền gốc</th><th>Lãi dự kiến</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#ECFEFF;color:#0891B2"><svg class="i"><use href="#i-landmark"/></svg></span><div><div class="a-name">Sổ tiết kiệm VCB</div><div class="a-meta">Vietcombank · <span class="due"><svg class="i" style="width:11px;height:11px"><use href="#i-clock"/></svg>Đáo hạn sau 20 ngày</span></div></div></div></td>
+                <td data-l="Lãi suất">6,2%/năm</td>
+                <td class="term-cell" data-l="Kỳ hạn" style="text-align:left"><div class="term"><div class="bar"><span style="width:94.5%;background:var(--t-save)"></span></div><div class="t"><span>12 tháng · 15/11/2025</span><span>→ 15/11/2026</span></div></div></td>
+                <td data-l="Tiền gốc"><span class="val">100.000.000 ₫</span></td>
+                <td data-l="Lãi dự kiến"><span class="pl pos">+6.200.000 ₫</span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- ── Tiền mặt ── -->
+      <article class="card group" aria-label="Tiền mặt và ngân hàng">
+        <div class="g-head">
+          <span class="g-ico" style="background:var(--t-cash)"><svg class="i"><use href="#i-banknote"/></svg></span>
+          <div><div class="g-title">Tiền mặt &amp; ngân hàng</div><div class="g-sub">2 tài khoản · tự cập nhật theo giao dịch</div></div>
+          <span class="g-spacer"></span>
+          <div class="g-total num"><b>31.500.000 ₫</b><span>5,8% tổng tài sản</span></div>
+        </div>
+        <div class="scroll-x">
+          <table class="tbl num">
+            <thead><tr><th>Tài khoản</th><th>Loại</th><th>Cập nhật</th><th>Số dư</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#ECFDF5;color:#059669"><svg class="i"><use href="#i-landmark"/></svg></span><div><div class="a-name">Tài khoản VPBank</div><div class="a-meta">VP Bank · ****6789</div></div></div></td>
+                <td data-l="Loại">Ngân hàng</td>
+                <td data-l="Cập nhật">Hôm nay</td>
+                <td data-l="Số dư"><span class="val">29.000.000 ₫</span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#ECFDF5;color:#059669"><svg class="i"><use href="#i-wallet"/></svg></span><div><div class="a-name">Ví tiền mặt</div><div class="a-meta">Tiền mặt</div></div></div></td>
+                <td data-l="Loại">Tiền mặt</td>
+                <td data-l="Cập nhật">23/10/2026</td>
+                <td data-l="Số dư"><span class="val">2.500.000 ₫</span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- ── Nợ ── -->
+      <article class="card group" aria-label="Nợ phải trả">
+        <div class="g-head">
+          <span class="g-ico" style="background:var(--t-debt)"><svg class="i"><use href="#i-card"/></svg></span>
+          <div><div class="g-title">Nợ phải trả</div><div class="g-sub">Trừ vào tài sản ròng</div></div>
+          <span class="g-spacer"></span>
+          <div class="g-total num"><b class="neg">−42.000.000 ₫</b><span>Kỳ tới 05/11: 1.900.000 ₫</span></div>
+        </div>
+        <div class="scroll-x">
+          <table class="tbl num">
+            <thead><tr><th>Khoản nợ</th><th>Lãi suất</th><th style="text-align:left">Đã trả</th><th>Còn nợ</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="asset"><span class="a-ico" style="background:#FEF2F2;color:#DC2626"><svg class="i"><use href="#i-car"/></svg></span><div><div class="a-name">Vay mua xe</div><div class="a-meta">TPBank · 36 tháng từ 05/04/2025</div></div></div></td>
+                <td data-l="Lãi suất">9,0%/năm</td>
+                <td class="term-cell" data-l="Đã trả" style="text-align:left"><div class="term"><div class="bar"><span style="width:30%;background:var(--t-debt)"></span></div><div class="t"><span>18.000.000 / 60.000.000 ₫</span><span>30%</span></div></div></td>
+                <td data-l="Còn nợ"><span class="val neg">−42.000.000 ₫</span></td>
+                <td class="act-cell"><span class="acts"><button class="icon-btn" aria-label="Sửa"><svg class="i sm"><use href="#i-pencil"/></svg></button><button class="icon-btn del" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></button></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- ── BĐS (trống) ── -->
+      <article class="card group" aria-label="Bất động sản">
+        <div class="empty-row">
+          <span class="g-ico" style="background:var(--t-re)"><svg class="i"><use href="#i-home"/></svg></span>
+          <div><div class="g-title" style="color:var(--text)">Bất động sản</div><div class="g-sub">Chưa có — nhà, đất, căn hộ… sẽ được tính vào tài sản ròng</div></div>
+          <a class="link" href="#add-re"><svg class="i sm"><use href="#i-plus"/></svg>Thêm</a>
+        </div>
+      </article>
+
+      <p class="mockup-note">Mockup — dữ liệu minh hoạ. Form theo loại: <a href="#add-stock">Cổ phiếu</a> · <a href="#add-gold">Vàng</a> · <a href="#add-save">Tiết kiệm</a> · <a href="#add-cash">Tiền mặt</a> · <a href="#add-debt">Nợ</a> · <a href="#add-re">BĐS</a></p>
+    </div>
+  </main>
+</div>
+
+<!-- ═══ Modal: Thêm / sửa tài sản ═══ -->
+<div class="overlay" id="asset-modal" role="dialog" aria-modal="true" aria-labelledby="am-title">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="am-title">Thêm tài sản</h2>
+      <a class="btn btn-ghost btn-icon" href="#" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></a>
+    </div>
+    <div class="modal-body">
+      <div class="f">
+        <span class="lbl">Loại tài sản</span>
+        <div class="types" role="radiogroup" aria-label="Loại tài sản">
+          <button class="type-opt" data-t="cash" role="radio"><span class="ti" style="background:#ECFDF5;color:var(--t-cash)"><svg class="i"><use href="#i-banknote"/></svg></span>Tiền mặt</button>
+          <button class="type-opt" data-t="gold" role="radio"><span class="ti" style="background:#FFFBEB;color:#D97706"><svg class="i"><use href="#i-coins"/></svg></span>Vàng</button>
+          <button class="type-opt" data-t="stock" role="radio"><span class="ti" style="background:#EEF2FF;color:var(--t-stock)"><svg class="i"><use href="#i-trend"/></svg></span>Cổ phiếu</button>
+          <button class="type-opt" data-t="save" role="radio"><span class="ti" style="background:#ECFEFF;color:#0891B2"><svg class="i"><use href="#i-landmark"/></svg></span>Tiết kiệm</button>
+          <button class="type-opt" data-t="debt" role="radio"><span class="ti" style="background:#FEF2F2;color:var(--t-debt)"><svg class="i"><use href="#i-card"/></svg></span>Nợ</button>
+          <button class="type-opt" data-t="re" role="radio"><span class="ti" style="background:#FDF2F8;color:var(--t-re)"><svg class="i"><use href="#i-home"/></svg></span>BĐS</button>
+        </div>
+      </div>
+
+      <!-- Cổ phiếu -->
+      <div class="tf" data-t="stock">
+        <div class="grid2">
+          <div class="f"><label for="s-code">Mã cổ phiếu <span class="req">*</span></label><input id="s-code" class="input upper" value="DCM"></div>
+          <div class="f"><label for="s-name">Tên hiển thị <small>tuỳ chọn</small></label><input id="s-name" class="input" value="Phân bón Cà Mau"></div>
+        </div>
+        <div class="grid3 num">
+          <div class="f"><label for="s-qty">Số lượng <span class="req">*</span></label><div class="with-unit"><input id="s-qty" class="input" value="2.000"><span>cp</span></div></div>
+          <div class="f"><label for="s-avg">Giá mua TB</label><div class="with-unit"><input id="s-avg" class="input" value="32.000"><span>₫</span></div></div>
+          <div class="f"><label for="s-cur">Giá hiện tại <span class="req">*</span></label><div class="with-unit"><input id="s-cur" class="input" value="38.500"><span>₫</span></div></div>
+        </div>
+        <div class="calc num">
+          <div><div class="l">Giá trị hiện tại</div><div class="big">77.000.000 ₫</div></div>
+          <div class="r"><div class="l">Lãi / lỗ</div><div class="pl pos" style="font-size:16px">+13.000.000 ₫ <small style="display:inline">+20,3%</small></div></div>
+          <div class="formula">2.000 cp × 38.500 ₫ · vốn 64.000.000 ₫</div>
+        </div>
+      </div>
+
+      <!-- Vàng -->
+      <div class="tf" data-t="gold">
+        <div class="f"><label for="g-name">Tên lô vàng <span class="req">*</span></label><input id="g-name" class="input" value="Nhẫn trơn 9999"></div>
+        <div class="grid2 num">
+          <div class="f"><span class="lbl">Đơn vị</span><div class="units"><button class="on">Lượng</button><button>Chỉ</button><button>Phân</button></div></div>
+          <div class="f"><label for="g-qty">Số lượng <span class="req">*</span></label><input id="g-qty" class="input" value="1"></div>
+        </div>
+        <div class="grid2 num">
+          <div class="f"><label for="g-buy">Giá mua <small>tổng tiền đã trả</small></label><div class="with-unit"><input id="g-buy" class="input" value="118.000.000"><span>₫</span></div></div>
+          <div class="f"><span class="lbl">Giá hiện tại <small>dùng chung cho mọi lô</small></span><div class="with-unit"><input class="input" readonly value="140.000.000"><span>₫/lượng</span></div><div class="hint"><a class="link" style="font-size:12px">Đổi giá vàng</a> · cập nhật 25/10/2026</div></div>
+        </div>
+        <div class="calc num">
+          <div><div class="l">Giá trị hiện tại</div><div class="big">140.000.000 ₫</div></div>
+          <div class="r"><div class="l">Lãi / lỗ</div><div class="pl pos" style="font-size:16px">+22.000.000 ₫ <small style="display:inline">+18,6%</small></div></div>
+          <div class="formula">1 lượng × 140.000.000 ₫/lượng (1 lượng = 10 chỉ)</div>
+        </div>
+      </div>
+
+      <!-- Tiết kiệm -->
+      <div class="tf" data-t="save">
+        <div class="grid2">
+          <div class="f"><label for="v-name">Tên sổ <span class="req">*</span></label><input id="v-name" class="input" value="Sổ tiết kiệm VCB"></div>
+          <div class="f"><label for="v-bank">Ngân hàng</label><input id="v-bank" class="input" value="Vietcombank"></div>
+        </div>
+        <div class="grid2 num">
+          <div class="f"><label for="v-amt">Số tiền gửi <span class="req">*</span></label><div class="with-unit"><input id="v-amt" class="input" value="100.000.000"><span>₫</span></div></div>
+          <div class="f"><label for="v-rate">Lãi suất <span class="req">*</span></label><div class="with-unit"><input id="v-rate" class="input" value="6,2"><span>%/năm</span></div></div>
+        </div>
+        <div class="f"><span class="lbl">Kỳ hạn</span><div class="chips"><button>1 tháng</button><button>3 tháng</button><button>6 tháng</button><button class="on">12 tháng</button><button>24 tháng</button><button>Khác…</button></div></div>
+        <div class="f"><label for="v-date">Ngày gửi</label><input id="v-date" class="input num" value="15/11/2025"></div>
+        <div class="calc num">
+          <div><div class="l">Ngày đáo hạn</div><div class="big">15/11/2026</div></div>
+          <div class="r"><div class="l">Lãi dự kiến</div><div class="pl pos" style="font-size:16px">+6.200.000 ₫</div></div>
+          <div class="formula">Nhận về khi đáo hạn: 106.200.000 ₫ · nhắc trước 7 ngày</div>
+        </div>
+      </div>
+
+      <!-- Tiền mặt -->
+      <div class="tf" data-t="cash">
+        <div class="f"><span class="lbl">Loại</span><div class="units" style="grid-template-columns:1fr 1fr"><button>Tiền mặt</button><button class="on">Tài khoản ngân hàng</button></div></div>
+        <div class="grid2">
+          <div class="f"><label for="c-name">Tên tài khoản <span class="req">*</span></label><input id="c-name" class="input" value="Tài khoản VPBank"></div>
+          <div class="f"><label for="c-bank">Ngân hàng</label><input id="c-bank" class="input" value="VP Bank"></div>
+        </div>
+        <div class="f num"><label for="c-bal">Số dư hiện tại <span class="req">*</span></label><div class="with-unit"><input id="c-bal" class="input" value="29.000.000"><span>₫</span></div><div class="hint">Số dư sẽ tự thay đổi khi bạn ghi giao dịch từ tài khoản này.</div></div>
+      </div>
+
+      <!-- Nợ -->
+      <div class="tf" data-t="debt">
+        <div class="grid2">
+          <div class="f"><label for="d-name">Tên khoản nợ <span class="req">*</span></label><input id="d-name" class="input" value="Vay mua xe"></div>
+          <div class="f"><label for="d-who">Bên cho vay</label><input id="d-who" class="input" value="TPBank"></div>
+        </div>
+        <div class="grid3 num">
+          <div class="f"><label for="d-amt">Nợ gốc <span class="req">*</span></label><div class="with-unit"><input id="d-amt" class="input" value="60.000.000"><span>₫</span></div></div>
+          <div class="f"><label for="d-rate">Lãi suất</label><div class="with-unit"><input id="d-rate" class="input" value="9"><span>%/năm</span></div></div>
+          <div class="f"><label for="d-term">Kỳ hạn</label><div class="with-unit"><input id="d-term" class="input" value="36"><span>tháng</span></div></div>
+        </div>
+        <div class="grid2 num">
+          <div class="f"><label for="d-date">Ngày vay</label><input id="d-date" class="input" value="05/04/2025"></div>
+          <div class="f"><label for="d-left">Còn nợ hiện tại</label><div class="with-unit"><input id="d-left" class="input" value="42.000.000"><span>₫</span></div></div>
+        </div>
+        <div class="calc num">
+          <div><div class="l">Trả hàng tháng (ước tính)</div><div class="big">1.900.000 ₫</div></div>
+          <div class="r"><div class="l">Đã trả</div><div class="pl" style="font-size:16px">30%</div></div>
+          <div class="formula">Khoản nợ được trừ khỏi tài sản ròng</div>
+        </div>
+      </div>
+
+      <!-- BĐS -->
+      <div class="tf" data-t="re">
+        <div class="f"><label for="r-name">Tên / mô tả <span class="req">*</span></label><input id="r-name" class="input" placeholder="VD: Căn hộ Q.7, đất Long An…"></div>
+        <div class="f num"><label for="r-val">Giá trị ước tính <span class="req">*</span></label><div class="with-unit"><input id="r-val" class="input" placeholder="0"><span>₫</span></div><div class="hint">Cập nhật thủ công khi giá thị trường thay đổi.</div></div>
+        <div class="f"><label for="r-addr">Địa chỉ <small>tuỳ chọn</small></label><input id="r-addr" class="input" placeholder="Số nhà, đường, quận/huyện…"></div>
+      </div>
+
+      <div class="f"><label for="note">Ghi chú <small>tuỳ chọn</small></label><input id="note" class="input" placeholder="Thêm ghi chú…"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="note">Giá trị được tính lại tự động khi đổi số lượng hoặc giá</span>
+      <a class="btn btn-ghost" href="#">Huỷ</a>
+      <button class="btn btn-primary">Lưu tài sản</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Mockup: mở form theo loại qua #add-<loại>, đổi loại trong form
+  const overlay = document.getElementById('asset-modal');
+  const setType = (t) => {
+    document.querySelectorAll('.type-opt').forEach(o => { const on = o.dataset.t === t; o.classList.toggle('on', on); o.setAttribute('aria-checked', on); });
+    document.querySelectorAll('.tf').forEach(f => f.classList.toggle('show', f.dataset.t === t));
+  };
+  const route = () => {
+    const m = location.hash.match(/^#add-(\w+)/);
+    overlay.classList.toggle('open', !!m);
+    if (m) setType(m[1]);
+  };
+  window.addEventListener('hashchange', route); route();
+  document.querySelectorAll('.type-opt').forEach(o => o.addEventListener('click', () => setType(o.dataset.t)));
+  document.querySelectorAll('.units, .chips, .seg, .type-bar').forEach(g => g.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    g.querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  })));
+</script>
+</body>
+</html>

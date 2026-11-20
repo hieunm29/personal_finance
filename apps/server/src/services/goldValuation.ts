@@ -6,8 +6,8 @@ type GoldAssetRow = {
 }
 
 function assertSupportedGoldUnit(unit: unknown): GoldUnit {
-  if (unit !== 'chi' && unit !== 'luong') {
-    throw new Error('Đơn vị vàng chỉ hỗ trợ chi hoặc lượng')
+  if (unit !== 'phan' && unit !== 'chi' && unit !== 'luong') {
+    throw new Error('Đơn vị vàng chỉ hỗ trợ phân, chỉ hoặc lượng')
   }
 
   return unit
@@ -43,6 +43,9 @@ export function parseGoldMetadata(metadata: string | null | undefined): GoldAsse
   return {
     unit: assertSupportedGoldUnit(record.unit),
     quantity: assertQuantity(record.quantity),
+    ...(typeof record.purchaseAmount === 'number' && Number.isFinite(record.purchaseAmount) && record.purchaseAmount >= 0
+      ? { purchaseAmount: Math.round(record.purchaseAmount) }
+      : {}),
   }
 }
 
@@ -58,11 +61,8 @@ export function calculateGoldAssetValue(
     throw new Error('Chưa cấu hình giá 1 lượng vàng')
   }
 
-  if (metadata.unit === 'luong') {
-    return Math.round(metadata.quantity * goldPricePerLuong)
-  }
-
-  return Math.round((metadata.quantity * goldPricePerLuong) / 10)
+  const divisor = metadata.unit === 'luong' ? 1 : metadata.unit === 'chi' ? 10 : 100
+  return Math.round((metadata.quantity * goldPricePerLuong) / divisor)
 }
 
 export function buildGoldRevaluationUpdates(

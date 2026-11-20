@@ -65,3 +65,22 @@ export function useDeleteCategory() {
     },
   })
 }
+
+export function useReorderCategories() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (items: Array<{ id: string; sortOrder: number }>) =>
+      apiClient<null>('/categories/order', { method: 'PATCH', body: { items } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.categories })
+    },
+  })
+}
+
+export function useCategoryUsage(id: string | null) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.categories, 'usage', id],
+    enabled: Boolean(id),
+    queryFn: () => apiClient<{ data: { transactionCount: number; totalAmount: number } }>(`/categories/${id}/usage`),
+  })
+}

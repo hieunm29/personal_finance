@@ -5,7 +5,7 @@ export type TransactionType = 'income' | 'expense' | 'transfer'
 export type CategoryType = 'income' | 'expense'
 export type WalletType = 'cash' | 'bank' | 'e-wallet'
 export type AssetType = 'cash' | 'bank' | 'gold' | 'stock' | 'savings' | 'real_estate' | 'debt'
-export type GoldUnit = 'chi' | 'luong'
+export type GoldUnit = 'phan' | 'chi' | 'luong'
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'yearly'
 export type ThemePreference = 'light' | 'dark' | 'system'
 
@@ -26,6 +26,7 @@ export interface UserProfile {
 export interface GoldAssetMetadata {
   unit: GoldUnit
   quantity: number
+  purchaseAmount?: number // cents, optional for legacy gold assets
 }
 
 export interface CategoryGroup {
@@ -78,8 +79,10 @@ export interface Transaction {
   type: TransactionType
   amount: number // cents
   categoryId: string
-  walletId: string
+  walletId: string | null
   assetId: string | null
+  recurringTemplateId: string | null
+  recurrenceInterval: RecurrenceInterval | null
   toWalletId: string | null
   date: string
   note: string | null
@@ -89,8 +92,8 @@ export interface Transaction {
 }
 
 export interface TransactionWithRelations extends Transaction {
-  category: Category
-  wallet: Wallet
+  category: Category | null
+  wallet: Wallet | null
   toWallet: Wallet | null
   asset: Asset | null
 }
@@ -147,6 +150,39 @@ export interface BudgetHistory {
   overage: number // cents: dương = vượt, âm = còn dư
 }
 
+export interface BudgetOverviewCategory {
+  categoryId: string
+  name: string
+  icon: string | null
+  color: string | null
+  groupName: string | null
+  spent: number
+  limitAmount: number | null
+  percentage: number
+  remaining: number | null
+}
+
+export interface BudgetOverview {
+  month: string
+  budget: (Budget & { categoryBudgets: CategoryBudget[] }) | null
+  totalSpent: number
+  remaining: number
+  percentage: number
+  allocatedAmount: number
+  unallocatedAmount: number
+  daysInMonth: number
+  daysElapsed: number
+  daysRemaining: number
+  dailyAllowance: number
+  averageDailySpend: number
+  projectedTotal: number
+  projectedOverage: number
+  status: 'on_track' | 'warning' | 'over'
+  categories: BudgetOverviewCategory[]
+  unbudgetedCategories: BudgetOverviewCategory[]
+  history: BudgetHistory[]
+}
+
 export interface Asset {
   id: string
   userId: string
@@ -188,7 +224,7 @@ export interface RecurringTemplate {
   type: TransactionType
   amount: number // cents
   categoryId: string
-  walletId: string
+  walletId: string | null
   assetId: string | null
   note: string | null
   interval: RecurrenceInterval
@@ -200,14 +236,48 @@ export interface RecurringTemplate {
 }
 
 export interface RecurringWithRelations extends RecurringTemplate {
-  category: Category
-  wallet: Wallet
+  category: Category | null
+  wallet: Wallet | null
 }
 
 export interface TransactionSummary {
   totalIncome: number // cents
   totalExpense: number // cents
   totalBalance: number // cents
+}
+
+export interface TransactionDailyExpense {
+  date: string // YYYY-MM-DD
+  amount: number // cents
+}
+
+export interface TransactionCategoryAggregate {
+  categoryId: string | null
+  categoryName: string
+  categoryColor: string | null
+  categoryIcon: string | null
+  amount: number // cents
+  percentage: number
+}
+
+export interface TransactionDailyTotal {
+  date: string
+  income: number
+  expense: number
+  netAmount: number
+}
+
+export interface TransactionAnalytics {
+  totalIncome: number // cents
+  totalExpense: number // cents
+  incomeCount: number
+  expenseCount: number
+  netAmount: number // cents
+  prevNetAmount: number | null // cents; null when no comparable date range was requested
+  total: number
+  dailyExpenses: TransactionDailyExpense[]
+  dailyTotals: TransactionDailyTotal[]
+  categories: TransactionCategoryAggregate[]
 }
 
 export interface ApiError {
@@ -237,6 +307,51 @@ export interface NetWorthData {
 export interface NetWorthHistoryPoint {
   month: string // YYYY-MM
   netWorth: number
+}
+
+export interface AssetOverviewItem extends Asset {
+  label: string
+  institution: string | null
+  address: string | null
+  ticker: string | null
+  quantity: number | null
+  unit: GoldUnit | null
+  costBasis: number | null
+  pnl: number | null
+  pnlPercent: number | null
+  interestRate: number | null
+  termMonths: number | null
+  startDate: string | null
+  maturityDate: string | null
+  expectedInterest: number | null
+  originalAmount: number | null
+  paidAmount: number | null
+  progressPercent: number | null
+}
+
+export interface AssetOverviewGroup {
+  type: AssetType
+  label: string
+  count: number
+  totalValue: number
+  pnl: number | null
+  pnlPercent: number | null
+  expectedInterest: number | null
+  items: AssetOverviewItem[]
+}
+
+export interface AssetOverview {
+  netWorth: number
+  goldPricePerLuong: number | null
+  previousNetWorth: number | null
+  netWorthDelta: number | null
+  netWorthDeltaPercent: number | null
+  totalAssets: number
+  totalDebt: number
+  investmentPnl: number
+  allocation: AssetAllocationItem[]
+  history: NetWorthHistoryPoint[]
+  groups: AssetOverviewGroup[]
 }
 
 // ═══════════════════════════════════════════════════════════

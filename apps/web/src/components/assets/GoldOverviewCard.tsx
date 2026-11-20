@@ -13,18 +13,18 @@ interface Props {
 function getGoldHoldingsSummary(goldAssets: Asset[]): string {
   let totalLuong = 0
   let totalChi = 0
+  let totalPhan = 0
 
   for (const asset of goldAssets) {
     const metadata = parseGoldMetadata(asset.metadata)
     if (!metadata) continue
     if (metadata.unit === 'luong') totalLuong += metadata.quantity
-    else totalChi += metadata.quantity
+    else if (metadata.unit === 'chi') totalChi += metadata.quantity
+    else totalPhan += metadata.quantity
   }
 
-  if (totalLuong === 0 && totalChi === 0) return 'Chưa có dữ liệu số lượng'
-  if (totalLuong === 0) return `${totalChi} chỉ`
-  if (totalChi === 0) return `${totalLuong} lượng`
-  return `${totalLuong} lượng + ${totalChi} chỉ`
+  if (totalLuong === 0 && totalChi === 0 && totalPhan === 0) return 'Chưa có dữ liệu số lượng'
+  return [totalLuong > 0 ? `${totalLuong} lượng` : '', totalChi > 0 ? `${totalChi} chỉ` : '', totalPhan > 0 ? `${totalPhan} phân` : ''].filter(Boolean).join(' + ')
 }
 
 const cardStyle: React.CSSProperties = {

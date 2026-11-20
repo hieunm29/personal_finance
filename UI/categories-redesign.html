@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Danh mục — Personal Finance (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F6F7FB;
+    --surface: #FFFFFF;
+    --border: #E5E7EF;
+    --text: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --brand: #4F46E5;
+    --brand-soft: #EEF2FF;
+    --income: #059669;
+    --income-soft: #ECFDF5;
+    --expense: #DC2626;
+    --expense-soft: #FEF2F2;
+    --warn: #D97706;
+    --warn-soft: #FFFBEB;
+    --info: #2563EB;
+    --info-soft: #EFF6FF;
+    --radius: 16px;
+    --shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 16px rgba(15,23,42,.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .sm { width: 14px !important; height: 14px !important; }
+
+  /* ── Layout chung ─────────────────────── */
+  .app { display: grid; grid-template-columns: 248px minmax(0,1fr); min-height: 100vh; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 20px; border-bottom: 1px solid var(--border); }
+  .brand-logo { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #6366F1, #4338CA); color: #fff; }
+  .brand-name { font-weight: 700; font-size: 15px; }
+  .brand-sub { font-size: 12px; color: var(--subtle); }
+  .nav { padding: 12px; flex: 1; }
+  .nav-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--subtle); padding: 12px 12px 6px; }
+  .nav a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; font-weight: 500; cursor: pointer; transition: background-color .2s, color .2s; }
+  .nav a:hover { background: #F1F5F9; color: var(--text); }
+  .nav a.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .user { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--border); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; font-weight: 600; }
+  .user-name { font-weight: 600; font-size: 13px; }
+  .user-mail { font-size: 12px; color: var(--subtle); }
+
+  .main { min-width: 0; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 32px; background: rgba(246,247,251,.85); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--border); }
+  .greet h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+  .greet p { color: var(--subtle); font-size: 13px; }
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; transition: background-color .2s, border-color .2s, color .2s; white-space: nowrap; }
+  .btn:hover { background: #F8FAFC; border-color: #CBD5E1; }
+  .btn-icon { width: 40px; padding: 0; position: relative; }
+  .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .btn-primary:hover { background: #4338CA; border-color: #4338CA; }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn-ghost:hover { background: #F1F5F9; border-color: transparent; color: var(--text); }
+  .btn-danger { color: var(--expense); }
+  .btn-danger:hover { background: var(--expense-soft); border-color: #FECACA; }
+  .count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; }
+
+  .content { padding: 24px 32px 48px; max-width: 1360px; display: grid; gap: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; min-width: 0; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .card-sub { font-size: 12px; color: var(--subtle); }
+  .badge { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .badge.good { background: var(--income-soft); color: var(--income); }
+  .badge.bad { background: var(--expense-soft); color: var(--expense); }
+  .badge.neutral { background: #F1F5F9; color: var(--muted); }
+  .badge.brand { background: var(--brand-soft); color: var(--brand); }
+  .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  .bar { height: 8px; background: #EEF0F5; border-radius: 999px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; border-radius: 999px; }
+
+
+  /* ── Toolbar ──────────────────────────── */
+  .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .tabs { display: inline-flex; background: #EEF0F5; border-radius: 12px; padding: 4px; }
+  .tabs button { height: 38px; padding: 0 16px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: background-color .2s, color .2s; }
+  .tabs button .n { font-size: 12px; font-weight: 600; padding: 0 7px; border-radius: 999px; background: rgba(15,23,42,.06); }
+  .tabs button.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(15,23,42,.1); }
+  .tabs button.on.exp .n { background: var(--expense-soft); color: var(--expense); }
+  .search { flex: 1; min-width: 220px; position: relative; }
+  .search svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--subtle); }
+  .search input { width: 100%; height: 44px; padding: 0 14px 0 42px; border: 1px solid var(--border); border-radius: 10px; font: inherit; background: var(--surface); color: var(--text); transition: border-color .2s, box-shadow .2s; }
+  .search input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+  .toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .switch { width: 40px; height: 24px; border-radius: 999px; background: #CBD5E1; position: relative; border: 0; cursor: pointer; transition: background-color .2s; flex-shrink: 0; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch[aria-checked="true"] { background: var(--brand); }
+  .switch[aria-checked="true"]::after { transform: translateX(16px); }
+
+  /* ── Groups ───────────────────────────── */
+  .split { display: grid; grid-template-columns: minmax(0,1fr) 380px; gap: 20px; align-items: start; }
+  .groups { display: grid; gap: 16px; }
+  .group { padding: 0; overflow: hidden; }
+  .group-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px 14px 20px; }
+  .group-ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+  .group-name { font-weight: 700; font-size: 15px; }
+  .group-meta { font-size: 12px; color: var(--subtle); }
+  .group-head .spacer { flex: 1; }
+  .icon-btn { width: 36px; height: 36px; border: 0; border-radius: 10px; background: transparent; color: var(--subtle); display: grid; place-items: center; cursor: pointer; transition: background-color .2s, color .2s; }
+  .icon-btn:hover { background: #F1F5F9; color: var(--text); }
+  .group.collapsed .tiles { display: none; }
+  .group.collapsed .chev-ico { transform: rotate(-90deg); }
+  .chev-ico { transition: transform .2s; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 10px; padding: 2px 16px 16px; }
+  .tile { position: relative; min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 12px; border: 1.5px solid var(--border); border-radius: 14px; background: #fff; cursor: pointer; text-align: left; font: inherit; color: inherit; transition: border-color .2s, background-color .2s, box-shadow .2s; min-width: 0; }
+  .tile:hover { border-color: #CBD5E1; box-shadow: 0 2px 8px rgba(15,23,42,.06); }
+  .tile.selected { border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+  .tile .cico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; }
+  .tile .cico svg { width: 20px; height: 20px; }
+  .tile .body { min-width: 0; flex: 1; }
+  .tile .nm { font-weight: 600; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .tile .nm .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .tile .st { font-size: 12px; color: var(--subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .acts { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; transition: opacity .2s; background: inherit; border-radius: 8px; }
+  .tile:hover .acts, .tile:focus-within .acts, .tile.selected .acts { opacity: 1; }
+  .tile .acts .icon-btn { width: 30px; height: 30px; border-radius: 8px; }
+  .tile .acts .icon-btn:hover { background: #fff; }
+  .tile.hidden-cat { background: #FAFBFD; border-style: dashed; }
+  .tile.hidden-cat .cico, .tile.hidden-cat .nm { opacity: .55; }
+  .pill { font-size: 10px; font-weight: 700; letter-spacing: .02em; padding: 1px 6px; border-radius: 6px; text-transform: uppercase; flex-shrink: 0; }
+  .pill.hid { background: #E2E8F0; color: #475569; }
+  .pill.cus { background: #F3E8FF; color: #7E22CE; }
+  .tile.add { justify-content: center; border-style: dashed; color: var(--subtle); font-weight: 500; background: transparent; min-height: 68px; }
+  .tile.add:hover { color: var(--brand); border-color: #A5B4FC; background: var(--brand-soft); box-shadow: none; }
+  .new-group { display: flex; align-items: center; justify-content: center; gap: 8px; height: 56px; border: 1.5px dashed #CBD5E1; border-radius: var(--radius); color: var(--muted); font: inherit; font-weight: 500; background: transparent; cursor: pointer; transition: border-color .2s, color .2s, background-color .2s; }
+  .new-group:hover { border-color: #A5B4FC; color: var(--brand); background: var(--brand-soft); }
+
+  /* ── Editor panel ─────────────────────── */
+  .editor { position: sticky; top: 104px; padding: 0; overflow: hidden; }
+  .editor:focus, .editor:target { outline: none; }
+  .ed-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .ed-head h2 { font-size: 16px; font-weight: 700; }
+  .ed-body { padding: 20px; display: grid; grid-template-columns: minmax(0,1fr); gap: 18px; }
+  .preview { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; background: linear-gradient(135deg, #FEF2F2, #FFF7ED); border: 1px solid #FECACA; }
+  .preview .cico { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; color: #fff; background: #EF4444; box-shadow: 0 6px 16px rgba(239,68,68,.35); flex-shrink: 0; }
+  .preview .cico svg { width: 26px; height: 26px; }
+  .preview .nm { font-size: 17px; font-weight: 700; }
+  .preview .path { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .field label, .field .lbl { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .field .lbl small, .field label small { font-weight: 400; color: var(--subtle); }
+  .input { width: 100%; height: 44px; border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; font: inherit; color: var(--text); background: #fff; transition: border-color .2s, box-shadow .2s; }
+  .input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+  .locked { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .locked div { padding: 10px 12px; border-radius: 10px; background: #F8FAFC; border: 1px solid var(--border); font-size: 13px; font-weight: 500; }
+  .locked div span { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--subtle); font-weight: 500; margin-bottom: 2px; }
+  .swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .swatch { aspect-ratio: 1; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: #fff; transition: box-shadow .2s; }
+  .swatch:hover { box-shadow: 0 0 0 3px #E2E8F0; }
+  .swatch.on { box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor; }
+  .swatch svg { width: 14px; height: 14px; stroke-width: 3; }
+  .icon-search { position: relative; margin-bottom: 10px; }
+  .icon-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--subtle); }
+  .icon-search input { padding-left: 36px; height: 38px; }
+  .icon-cats { display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; }
+  .icon-cats button { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .icon-cats button.on { background: var(--text); border-color: var(--text); color: #fff; }
+  .icons { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-height: 172px; overflow-y: auto; padding: 2px; }
+  .ico-opt { aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--muted); display: grid; place-items: center; cursor: pointer; transition: background-color .2s, border-color .2s, color .2s; }
+  .ico-opt:hover { background: #F8FAFC; border-color: #CBD5E1; color: var(--text); }
+  .ico-opt.on { background: #FEF2F2; border-color: #EF4444; color: #EF4444; box-shadow: 0 0 0 2px rgba(239,68,68,.15); }
+  .vis { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+  .vis .txt { flex: 1; }
+  .vis .txt b { display: block; font-size: 13px; }
+  .vis .txt span { font-size: 12px; color: var(--subtle); }
+  .usage { display: flex; gap: 8px; font-size: 12px; color: var(--muted); background: var(--info-soft); border: 1px solid #BFDBFE; border-radius: 10px; padding: 10px 12px; }
+  .usage svg { color: var(--info); margin-top: 1px; }
+  .ed-foot { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); background: #FAFBFD; }
+  .ed-foot .left { margin-right: auto; }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .sheet-close { display: none; }
+
+  .mockup-note { font-size: 12px; color: var(--subtle); text-align: center; }
+
+  /* ── Responsive ───────────────────────── */
+  @media (max-width: 1180px) {
+    .split { grid-template-columns: minmax(0,1fr) 340px; }
+    .swatches { grid-template-columns: repeat(6, 1fr); }
+    .icons { grid-template-columns: repeat(6, 1fr); }
+  }
+  @media (max-width: 960px) {
+    .split { grid-template-columns: minmax(0,1fr); }
+    .editor { display: none; position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 50; border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto; box-shadow: 0 -12px 40px rgba(15,23,42,.25); }
+    .editor:target { display: block; }
+    .editor:target ~ .scrim { display: block; }
+    .scrim { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 40; }
+    .sheet-close { display: grid; }
+    .swatches { grid-template-columns: repeat(8, 1fr); }
+    .icons { grid-template-columns: repeat(7, 1fr); }
+  }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: minmax(0,1fr); }
+    .sidebar { display: none; }
+    .topbar { padding: 16px; }
+    .content { padding: 16px 16px 48px; }
+    .btn-label { display: none; }
+    .tile .acts { opacity: 1; }
+  }
+  @media (max-width: 560px) {
+    .greet p { display: none; }
+    .tabs { width: 100%; }
+    .tabs button { flex: 1; justify-content: center; padding: 0 8px; }
+    .search { min-width: 100%; }
+    .tiles { grid-template-columns: minmax(0,1fr); padding: 12px; }
+    .group-head { padding: 12px; gap: 10px; }
+    .swatches { grid-template-columns: repeat(8, 1fr); }
+    .icons { grid-template-columns: repeat(6, 1fr); }
+    .ed-foot .left .btn-label { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- Icon sprite (Lucide) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m7 17 10-10M7 7h10v10"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7v10H7"/></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M3 7h18M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-piggy" viewBox="0 0 24 24"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-food" viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10l-2.7-3.6A2 2 0 0 0 13.7 6H8.3a2 2 0 0 0-1.6.9L4 10l-1.5.6C1.7 11 1 11.7 1 12.6V16c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 17h6"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.7 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.2 6.8a2.8 2.8 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M6 2v2M10 2v2M14 2v2"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 2h3l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M16 8H8M16 12H8M13 16H8"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+  <symbol id="i-pill" viewBox="0 0 24 24"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></symbol>
+  <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/></symbol>
+  <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59C2.6 9.42 2 14.46 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.41-1.41A2 2 0 0 1 9.83 16h4.34a2 2 0 0 1 1.42.59L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.55-.6-6.58-.68-7.26A4 4 0 0 0 17.32 5z"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+  <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-party" viewBox="0 0 24 24"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01M22 8h.01M15 2h.01M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></symbol>
+  <symbol id="i-landmark" viewBox="0 0 24 24"><path d="M3 22h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7M12 2l8 5H4z"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.05Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ═══ Sidebar ═══ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><svg class="i"><use href="#i-wallet"/></svg></div>
+      <div><div class="brand-name">Personal Finance</div><div class="brand-sub">Quản lý tài chính</div></div>
+    </div>
+    <nav class="nav" aria-label="Điều hướng chính">
+      <div class="nav-label">TỔNG QUAN</div>
+      <a href="dashboard-redesign.html"><svg class="i"><use href="#i-dashboard"/></svg>Dashboard</a>
+      <div class="nav-label">QUẢN LÝ</div>
+      <a href="transactions-redesign.html"><svg class="i"><use href="#i-swap"/></svg>Giao dịch</a>
+      <a class="active" href="#" aria-current="page"><svg class="i"><use href="#i-tag"/></svg>Danh mục</a>
+      <a href="#"><svg class="i"><use href="#i-target"/></svg>Ngân sách</a>
+      <a href="#"><svg class="i"><use href="#i-wallet"/></svg>Tài sản</a>
+      <a href="#"><svg class="i"><use href="#i-chart"/></svg>Báo cáo</a>
+      <div class="nav-label">HỆ THỐNG</div>
+      <a href="#"><svg class="i"><use href="#i-settings"/></svg>Cài đặt</a>
+    </nav>
+    <div class="user">
+      <div class="avatar">H</div>
+      <div style="min-width:0;flex:1"><div class="user-name">hieunm29</div><div class="user-mail">hieunm29@gmail.com</div></div>
+      <button class="btn btn-icon" aria-label="Đăng xuất" style="width:34px;height:34px"><svg class="i sm"><use href="#i-logout"/></svg></button>
+    </div>
+  </aside>
+
+  <!-- ═══ Main ═══ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="greet">
+        <h1>Danh mục</h1>
+        <p>Sắp xếp các khoản thu chi theo nhóm để theo dõi dễ hơn</p>
+      </div>
+      <div class="actions">
+        <button class="btn"><svg class="i"><use href="#i-folder-plus"/></svg><span class="btn-label">Nhóm mới</span></button>
+        <a class="btn btn-primary" href="#edit"><svg class="i"><use href="#i-plus"/></svg><span class="btn-label">Danh mục mới</span></a>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <section class="toolbar" aria-label="Lọc danh mục">
+        <div class="tabs" role="tablist" aria-label="Loại danh mục">
+          <button class="on exp" role="tab" aria-selected="true"><svg class="i sm" style="color:var(--expense)"><use href="#i-out"/></svg>Chi tiêu<span class="n num">16</span></button>
+          <button role="tab" aria-selected="false"><svg class="i sm" style="color:var(--income)"><use href="#i-in"/></svg>Thu nhập<span class="n num">10</span></button>
+        </div>
+        <div class="search">
+          <svg class="i"><use href="#i-search"/></svg>
+          <input type="search" placeholder="Tìm danh mục…" aria-label="Tìm danh mục">
+        </div>
+        <label class="toggle"><button class="switch" role="switch" aria-checked="true" aria-label="Hiện danh mục đã ẩn"></button>Hiện mục đã ẩn (1)</label>
+      </section>
+
+      <section class="split">
+        <div class="groups">
+
+          <!-- Nhóm: Thiết yếu -->
+          <article class="card group">
+            <div class="group-head">
+              <span class="group-ico" style="background:#EF4444"><svg class="i"><use href="#i-shield"/></svg></span>
+              <div><div class="group-name">Thiết yếu</div><div class="group-meta">6 danh mục · 1 đang ẩn</div></div>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Tuỳ chọn nhóm"><svg class="i"><use href="#i-more"/></svg></button>
+              <button class="icon-btn" aria-label="Thu gọn nhóm" aria-expanded="true"><svg class="i chev-ico"><use href="#i-chevron"/></svg></button>
+            </div>
+            <div class="tiles">
+              <button class="tile selected" aria-pressed="true">
+                <span class="cico" style="background:#FEF2F2;color:#EF4444"><svg class="i"><use href="#i-food"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Ăn uống</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#FFF7ED;color:#F97316"><svg class="i"><use href="#i-car"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Di chuyển</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#FEFCE8;color:#CA8A04"><svg class="i"><use href="#i-home"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Nhà ở</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#F7FEE7;color:#65A30D"><svg class="i"><use href="#i-zap"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Điện nước</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#F0FDF4;color:#16A34A"><svg class="i"><use href="#i-pill"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Y tế</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile hidden-cat">
+                <span class="cico" style="background:#ECFEFF;color:#0891B2"><svg class="i"><use href="#i-shield"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Bảo hiểm</span> <span class="pill hid">Đã ẩn</span></span><span class="st">Không hiện khi tạo giao dịch</span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Hiện lại"><svg class="i sm"><use href="#i-eye"/></svg></span></span>
+              </button>
+              <button class="tile add"><svg class="i"><use href="#i-plus"/></svg>Thêm vào Thiết yếu</button>
+            </div>
+          </article>
+
+          <!-- Nhóm: Sinh hoạt -->
+          <article class="card group">
+            <div class="group-head">
+              <span class="group-ico" style="background:#3B82F6"><svg class="i"><use href="#i-bag"/></svg></span>
+              <div><div class="group-name">Sinh hoạt</div><div class="group-meta">4 danh mục · 1 tuỳ chỉnh</div></div>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Tuỳ chọn nhóm"><svg class="i"><use href="#i-more"/></svg></button>
+              <button class="icon-btn" aria-label="Thu gọn nhóm" aria-expanded="true"><svg class="i chev-ico"><use href="#i-chevron"/></svg></button>
+            </div>
+            <div class="tiles">
+              <button class="tile">
+                <span class="cico" style="background:#EFF6FF;color:#3B82F6"><svg class="i"><use href="#i-shirt"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Mua sắm</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#F5F3FF;color:#8B5CF6"><svg class="i"><use href="#i-book"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Giáo dục</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#FDF4FF;color:#C026D3"><svg class="i"><use href="#i-sparkles"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Chăm sóc cá nhân</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#FFFBEB;color:#D97706"><svg class="i"><use href="#i-paw"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Thú cưng</span> <span class="pill cus">Tuỳ chỉnh</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Xoá"><svg class="i sm"><use href="#i-trash"/></svg></span></span>
+              </button>
+              <button class="tile add"><svg class="i"><use href="#i-plus"/></svg>Thêm vào Sinh hoạt</button>
+            </div>
+          </article>
+
+          <!-- Nhóm: Giải trí -->
+          <article class="card group">
+            <div class="group-head">
+              <span class="group-ico" style="background:#EC4899"><svg class="i"><use href="#i-gamepad"/></svg></span>
+              <div><div class="group-name">Giải trí</div><div class="group-meta">4 danh mục</div></div>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Tuỳ chọn nhóm"><svg class="i"><use href="#i-more"/></svg></button>
+              <button class="icon-btn" aria-label="Thu gọn nhóm" aria-expanded="true"><svg class="i chev-ico"><use href="#i-chevron"/></svg></button>
+            </div>
+            <div class="tiles">
+              <button class="tile">
+                <span class="cico" style="background:#FFF1F2;color:#E11D48"><svg class="i"><use href="#i-coffee"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Cafe/Ăn ngoài</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#FDF2F8;color:#DB2777"><svg class="i"><use href="#i-gamepad"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Giải trí</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#F0FDFA;color:#0D9488"><svg class="i"><use href="#i-plane"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Du lịch</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile">
+                <span class="cico" style="background:#ECFDF5;color:#059669"><svg class="i"><use href="#i-dumbbell"/></svg></span>
+                <span class="body"><span class="nm"><span class="t">Thể thao</span></span></span>
+                <span class="acts"><span class="icon-btn" aria-label="Ẩn"><svg class="i sm"><use href="#i-eye-off"/></svg></span></span>
+              </button>
+              <button class="tile add"><svg class="i"><use href="#i-plus"/></svg>Thêm vào Giải trí</button>
+            </div>
+          </article>
+
+          <!-- Nhóm: Xã hội (thu gọn) -->
+          <article class="card group collapsed">
+            <div class="group-head">
+              <span class="group-ico" style="background:#F59E0B"><svg class="i"><use href="#i-gift"/></svg></span>
+              <div><div class="group-name">Xã hội</div><div class="group-meta">2 danh mục · Quà tặng, Từ thiện</div></div>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Tuỳ chọn nhóm"><svg class="i"><use href="#i-more"/></svg></button>
+              <button class="icon-btn" aria-label="Mở rộng nhóm" aria-expanded="false"><svg class="i chev-ico"><use href="#i-chevron"/></svg></button>
+            </div>
+            <div class="tiles"></div>
+                      </article>
+
+          <button class="new-group"><svg class="i"><use href="#i-folder-plus"/></svg>Tạo nhóm chi tiêu mới</button>
+        </div>
+
+        <!-- ═══ Editor (desktop: panel cố định · mobile: bottom sheet) ═══ -->
+        <aside class="card editor" id="edit" aria-label="Sửa danh mục">
+          <div class="ed-head">
+            <h2>Sửa danh mục</h2>
+            <a class="icon-btn sheet-close" href="#" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></a>
+          </div>
+          <div class="ed-body">
+            <div class="preview">
+              <span class="cico"><svg class="i"><use href="#i-food"/></svg></span>
+              <div style="min-width:0">
+                <div class="nm">Ăn uống</div>
+                <div class="path"><span class="badge bad">Chi tiêu</span>Thiết yếu<svg class="i sm"><use href="#i-arrow-right"/></svg>Ăn uống</div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="cat-name">Tên danh mục <small class="num">7 / 30</small></label>
+              <input id="cat-name" class="input" value="Ăn uống">
+            </div>
+
+            <div class="locked">
+              <div><span><svg class="i" style="width:11px;height:11px"><use href="#i-lock"/></svg>Loại</span>Chi tiêu</div>
+              <div><span><svg class="i" style="width:11px;height:11px"><use href="#i-lock"/></svg>Nhóm</span>Thiết yếu</div>
+            </div>
+
+            <div class="field">
+              <span class="lbl">Màu sắc</span>
+              <div class="swatches" role="radiogroup" aria-label="Màu sắc">
+                <button class="swatch on" style="background:#EF4444;color:#EF4444" aria-label="Đỏ" aria-checked="true" role="radio"><svg class="i" style="color:#fff"><use href="#i-tick"/></svg></button>
+                <button class="swatch" style="background:#F97316;color:#F97316" aria-label="Cam" role="radio"></button>
+                <button class="swatch" style="background:#EAB308;color:#EAB308" aria-label="Vàng" role="radio"></button>
+                <button class="swatch" style="background:#84CC16;color:#84CC16" aria-label="Xanh chanh" role="radio"></button>
+                <button class="swatch" style="background:#22C55E;color:#22C55E" aria-label="Xanh lá" role="radio"></button>
+                <button class="swatch" style="background:#14B8A6;color:#14B8A6" aria-label="Xanh ngọc" role="radio"></button>
+                <button class="swatch" style="background:#06B6D4;color:#06B6D4" aria-label="Xanh lơ" role="radio"></button>
+                <button class="swatch" style="background:#3B82F6;color:#3B82F6" aria-label="Xanh dương" role="radio"></button>
+                <button class="swatch" style="background:#6366F1;color:#6366F1" aria-label="Chàm" role="radio"></button>
+                <button class="swatch" style="background:#8B5CF6;color:#8B5CF6" aria-label="Tím" role="radio"></button>
+                <button class="swatch" style="background:#D946EF;color:#D946EF" aria-label="Tím hồng" role="radio"></button>
+                <button class="swatch" style="background:#EC4899;color:#EC4899" aria-label="Hồng" role="radio"></button>
+                <button class="swatch" style="background:#F43F5E;color:#F43F5E" aria-label="Hồng đỏ" role="radio"></button>
+                <button class="swatch" style="background:#F59E0B;color:#F59E0B" aria-label="Hổ phách" role="radio"></button>
+                <button class="swatch" style="background:#64748B;color:#64748B" aria-label="Xám" role="radio"></button>
+                <button class="swatch" style="background:#0F172A;color:#0F172A" aria-label="Đen" role="radio"></button>
+              </div>
+            </div>
+
+            <div class="field">
+              <span class="lbl">Biểu tượng <small>Đã chọn: utensils</small></span>
+              <div class="icon-search"><svg class="i sm"><use href="#i-search"/></svg><input class="input" placeholder="Tìm biểu tượng (vd: xe, cafe…)" aria-label="Tìm biểu tượng"></div>
+              <div class="icon-cats"><button class="on">Tất cả</button><button>Ăn uống</button><button>Đi lại</button><button>Nhà cửa</button><button>Tài chính</button></div>
+              <div class="icons" role="radiogroup" aria-label="Biểu tượng">
+                <button class="ico-opt on" aria-label="utensils" role="radio" aria-checked="true"><svg class="i"><use href="#i-food"/></svg></button>
+                <button class="ico-opt" aria-label="coffee" role="radio"><svg class="i"><use href="#i-coffee"/></svg></button>
+                <button class="ico-opt" aria-label="cart" role="radio"><svg class="i"><use href="#i-cart"/></svg></button>
+                <button class="ico-opt" aria-label="car" role="radio"><svg class="i"><use href="#i-car"/></svg></button>
+                <button class="ico-opt" aria-label="plane" role="radio"><svg class="i"><use href="#i-plane"/></svg></button>
+                <button class="ico-opt" aria-label="house" role="radio"><svg class="i"><use href="#i-home"/></svg></button>
+                <button class="ico-opt" aria-label="zap" role="radio"><svg class="i"><use href="#i-zap"/></svg></button>
+                <button class="ico-opt" aria-label="pill" role="radio"><svg class="i"><use href="#i-pill"/></svg></button>
+                <button class="ico-opt" aria-label="heart" role="radio"><svg class="i"><use href="#i-heart"/></svg></button>
+                <button class="ico-opt" aria-label="shield" role="radio"><svg class="i"><use href="#i-shield"/></svg></button>
+                <button class="ico-opt" aria-label="shirt" role="radio"><svg class="i"><use href="#i-shirt"/></svg></button>
+                <button class="ico-opt" aria-label="bag" role="radio"><svg class="i"><use href="#i-bag"/></svg></button>
+                <button class="ico-opt" aria-label="book-open" role="radio"><svg class="i"><use href="#i-book"/></svg></button>
+                <button class="ico-opt" aria-label="sparkles" role="radio"><svg class="i"><use href="#i-sparkles"/></svg></button>
+                <button class="ico-opt" aria-label="gamepad-2" role="radio"><svg class="i"><use href="#i-gamepad"/></svg></button>
+                <button class="ico-opt" aria-label="film" role="radio"><svg class="i"><use href="#i-film"/></svg></button>
+                <button class="ico-opt" aria-label="dumbbell" role="radio"><svg class="i"><use href="#i-dumbbell"/></svg></button>
+                <button class="ico-opt" aria-label="gift" role="radio"><svg class="i"><use href="#i-gift"/></svg></button>
+                <button class="ico-opt" aria-label="paw-print" role="radio"><svg class="i"><use href="#i-paw"/></svg></button>
+                <button class="ico-opt" aria-label="receipt" role="radio"><svg class="i"><use href="#i-receipt"/></svg></button>
+                <button class="ico-opt" aria-label="briefcase" role="radio"><svg class="i"><use href="#i-briefcase"/></svg></button>
+                <button class="ico-opt" aria-label="laptop" role="radio"><svg class="i"><use href="#i-laptop"/></svg></button>
+                <button class="ico-opt" aria-label="landmark" role="radio"><svg class="i"><use href="#i-landmark"/></svg></button>
+                <button class="ico-opt" aria-label="trending-up" role="radio"><svg class="i"><use href="#i-trend"/></svg></button>
+                <button class="ico-opt" aria-label="wallet" role="radio"><svg class="i"><use href="#i-wallet"/></svg></button>
+                <button class="ico-opt" aria-label="piggy-bank" role="radio"><svg class="i"><use href="#i-piggy"/></svg></button>
+                <button class="ico-opt" aria-label="party-popper" role="radio"><svg class="i"><use href="#i-party"/></svg></button>
+                <button class="ico-opt" aria-label="clipboard-list" role="radio"><svg class="i"><use href="#i-clipboard"/></svg></button>
+              </div>
+            </div>
+
+            <div class="vis">
+              <span class="stat-ico" style="background:var(--brand-soft);color:var(--brand)"><svg class="i"><use href="#i-eye"/></svg></span>
+              <div class="txt"><b>Hiển thị khi tạo giao dịch</b><span>Tắt để ẩn khỏi danh sách chọn, giao dịch cũ vẫn giữ nguyên</span></div>
+              <button class="switch" role="switch" aria-checked="true" aria-label="Hiển thị danh mục"></button>
+            </div>
+
+            <div class="usage num"><svg class="i sm"><use href="#i-info"/></svg><span>Đang dùng trong <b>128 giao dịch</b>. Thay đổi tên, màu và biểu tượng sẽ áp dụng cho tất cả.</span></div>
+          </div>
+          <div class="ed-foot">
+            <span class="left"><button class="btn btn-danger" disabled title="Danh mục mặc định chỉ có thể ẩn, không thể xoá"><svg class="i sm"><use href="#i-trash"/></svg><span class="btn-label">Xoá</span></button></span>
+            <a class="btn btn-ghost" href="#">Huỷ</a>
+            <button class="btn btn-primary">Lưu thay đổi</button>
+          </div>
+        </aside>
+        <a class="scrim" href="#" aria-label="Đóng"></a>
+      </section>
+
+      <p class="mockup-note">Mockup — dữ liệu minh hoạ. Trên mobile, mở <a href="#edit">#edit</a> để xem bảng sửa danh mục.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Mockup: chọn danh mục, thu gọn nhóm, chọn màu/icon, bật tắt
+  document.querySelectorAll('.tile:not(.add)').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tile').forEach(x => { x.classList.remove('selected'); x.setAttribute('aria-pressed', 'false'); });
+    t.classList.add('selected'); t.setAttribute('aria-pressed', 'true');
+  }));
+  document.querySelectorAll('.group-head .icon-btn[aria-expanded]').forEach(b => b.addEventListener('click', () => {
+    const g = b.closest('.group'); g.classList.toggle('collapsed');
+    b.setAttribute('aria-expanded', !g.classList.contains('collapsed'));
+  }));
+  const pick = (sel) => document.querySelectorAll(sel).forEach(o => o.addEventListener('click', () => {
+    document.querySelectorAll(sel).forEach(x => { x.classList.remove('on'); x.setAttribute('aria-checked', 'false'); x.innerHTML = x.classList.contains('swatch') ? '' : x.innerHTML; });
+    o.classList.add('on'); o.setAttribute('aria-checked', 'true');
+    if (o.classList.contains('swatch')) {
+      o.innerHTML = '<svg class="i" style="color:#fff"><use href="#i-tick"/></svg>';
+      const c = o.style.background;
+      const pv = document.querySelector('.preview .cico');
+      pv.style.background = c; pv.style.boxShadow = 'none';
+    }
+  }));
+  pick('.swatch'); pick('.ico-opt'); pick('.icon-cats button');
+  document.querySelectorAll('.switch').forEach(s => s.addEventListener('click', (e) => { e.preventDefault(); s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true'); }));
+</script>
+</body>
+</html>

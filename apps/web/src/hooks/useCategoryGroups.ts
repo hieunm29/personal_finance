@@ -34,3 +34,25 @@ export function useUpdateCategoryGroup(id: string) {
     },
   })
 }
+
+export function useDeleteCategoryGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiClient<null>(`/category-groups/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.categoryGroups })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.categories })
+    },
+  })
+}
+
+export function useReorderCategoryGroups() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (items: Array<{ id: string; sortOrder: number }>) =>
+      apiClient<null>('/category-groups/order', { method: 'PATCH', body: { items } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.categoryGroups })
+    },
+  })
+}

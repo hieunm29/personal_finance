@@ -48,25 +48,43 @@ const walletIdSchema = z
     'Wallet ID không hợp lệ'
   )
 
-export const createTransactionSchema = z.object({
+const dateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày: YYYY-MM-DD')
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00`)
+    return !Number.isNaN(date.getTime()) && date.toLocaleDateString('sv') === value
+  }, 'Ngày không hợp lệ')
+
+const transactionInputSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']),
-  amount: z.number().positive('Số tiền phải lớn hơn 0'),
+  amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
   categoryId: z.string().uuid('Category ID không hợp lệ'),
   walletId: walletIdSchema,
   toWalletId: walletIdSchema.optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày: YYYY-MM-DD'),
+  date: dateSchema,
   note: z.string().max(500).optional(),
   isRecurring: z.boolean().default(false),
+  recurrenceInterval: z.enum(['weekly', 'monthly', 'yearly']).optional(),
 })
 
-export const updateTransactionSchema = createTransactionSchema.omit({ type: true }).partial()
+export const createTransactionSchema = transactionInputSchema.refine((value) => !value.isRecurring || !!value.recurrenceInterval, {
+  message: 'Vui lòng chọn chu kỳ lặp lại',
+  path: ['recurrenceInterval'],
+})
+
+export const updateTransactionSchema = transactionInputSchema.omit({ type: true }).partial()
 
 export const transactionFilterSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']).optional(),
   categoryId: z.string().uuid().optional(),
-  walletId: z.string().uuid().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  walletId: walletIdSchema.optional(),
+  walletIds: z.string().optional().refine(
+    (value) => !value || value.split(',').every((id) => walletIdSchema.safeParse(id.trim()).success),
+    'Danh sách ví không hợp lệ',
+  ),
+  dateFrom: dateSchema.optional(),
+  dateTo: dateSchema.optional(),
   search: z.string().optional(),
   amountFrom: z.coerce.number().int().optional(),
   amountTo: z.coerce.number().int().optional(),
@@ -74,19 +92,27 @@ export const transactionFilterSchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 })
 
-export const createRecurringSchema = z.object({
+export const transactionAnalyticsFilterSchema = transactionFilterSchema.omit({ page: true, limit: true })
+
+const recurringInputSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']),
   amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
   categoryId: z.string().uuid('Category ID không hợp lệ'),
   walletId: walletIdSchema,
   note: z.string().max(500).optional(),
-  interval: z.enum(['weekly', 'monthly', 'yearly']),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày: YYYY-MM-DD'),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  interval: z.enum(['weekly', 'monthly', 'yearly']).optional(),
+  recurrenceInterval: z.enum(['weekly', 'monthly', 'yearly']).optional(),
+  startDate: dateSchema,
+  endDate: dateSchema.optional(),
 })
 
-export const updateRecurringSchema = createRecurringSchema
-  .pick({ amount: true, note: true, endDate: true })
+export const createRecurringSchema = recurringInputSchema.refine((value) => !!(value.interval ?? value.recurrenceInterval), {
+  message: 'Vui lòng chọn chu kỳ lặp lại',
+  path: ['interval'],
+})
+
+export const updateRecurringSchema = recurringInputSchema
+  .pick({ amount: true, note: true, endDate: true, interval: true, recurrenceInterval: true })
   .extend({ isActive: z.boolean().optional() })
   .partial()
 
@@ -120,6 +146,12 @@ export const updateCategoryGroupSchema = createCategoryGroupSchema
 export const deleteCategorySchema = z.object({
   replacementCategoryId: z.string().uuid().optional(),
 })
+
+export const categoryOrderSchema = z.object({
+  items: z.array(z.object({ id: z.string().uuid(), sortOrder: z.number().int().min(0) })).min(1),
+})
+
+export const categoryGroupOrderSchema = categoryOrderSchema
 
 // ═══════════════════════════════════════════════════════════
 // Wallet schemas
@@ -232,6 +264,7 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>
 export type TransactionFilter = z.infer<typeof transactionFilterSchema>
+export type TransactionAnalyticsFilter = z.infer<typeof transactionAnalyticsFilterSchema>
 export type CreateRecurringInput = z.infer<typeof createRecurringSchema>
 export type UpdateRecurringInput = z.infer<typeof updateRecurringSchema>
 export type CreateCategoryGroupInput = z.infer<typeof createCategoryGroupSchema>
@@ -239,6 +272,8 @@ export type UpdateCategoryGroupInput = z.infer<typeof updateCategoryGroupSchema>
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>
 export type DeleteCategoryInput = z.infer<typeof deleteCategorySchema>
+export type CategoryOrderInput = z.infer<typeof categoryOrderSchema>
+export type CategoryGroupOrderInput = z.infer<typeof categoryGroupOrderSchema>
 export type CreateWalletInput = z.infer<typeof createWalletSchema>
 export type UpdateWalletInput = z.infer<typeof updateWalletSchema>
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>

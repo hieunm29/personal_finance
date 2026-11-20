@@ -10,6 +10,8 @@ import {
   copyPreviousBudget,
   getBudgetProgress,
   getBudgetHistory,
+  getBudgetOverview,
+  getBudgetSuggestion,
 } from '../services/budgetService'
 
 type Variables = { userId: string }
@@ -22,6 +24,14 @@ const monthQuerySchema = z.object({
 budgetRoute.get('/history', (c) => {
   const history = getBudgetHistory(c.get('userId'))
   return c.json({ data: history })
+})
+
+budgetRoute.get('/overview', zValidator('query', monthQuerySchema), (c) => {
+  return c.json({ data: getBudgetOverview(c.get('userId'), c.req.valid('query').month) })
+})
+
+budgetRoute.get('/suggestion', zValidator('query', monthQuerySchema), (c) => {
+  return c.json({ data: getBudgetSuggestion(c.get('userId'), c.req.valid('query').month) })
 })
 
 budgetRoute.get('/progress', zValidator('query', monthQuerySchema), (c) => {

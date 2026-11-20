@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { authClient } from '../../lib/auth-client'
+import DashboardIcon, { type DashboardIconName } from '../dashboard/DashboardIcon'
+import './dashboard-layout.css'
 
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
@@ -37,6 +40,27 @@ export default function AppLayout() {
   const userName = session?.user?.name ?? session?.user?.email ?? ''
   const userEmail = session?.user?.email ?? ''
   const avatarLetter = getAvatarLetter(session?.user?.name, session?.user?.email)
+
+  if (
+    location.pathname === '/' ||
+    location.pathname === '/transactions' ||
+    location.pathname.startsWith('/transactions/') ||
+    location.pathname === '/categories' ||
+    location.pathname === '/budget' ||
+    location.pathname === '/assets' ||
+    location.pathname === '/reports' ||
+    location.pathname === '/settings'
+  ) {
+    return (
+      <DashboardLayout
+        userName={userName}
+        userEmail={userEmail}
+        avatarLetter={avatarLetter}
+        onSignOut={handleSignOut}
+        isSettings={location.pathname === '/settings'}
+      />
+    )
+  }
 
   return (
     /* .app { display: flex; height: 100vh; overflow: hidden; } */
@@ -269,6 +293,174 @@ export default function AppLayout() {
         >
           <Outlet />
         </main>
+      </div>
+    </div>
+  )
+}
+
+interface DashboardLayoutProps {
+  userName: string
+  userEmail: string
+  avatarLetter: string
+  onSignOut: () => Promise<void>
+  isSettings: boolean
+}
+
+const DASHBOARD_NAV: Array<{
+  section?: string
+  items: Array<{ to: string; label: string; icon: DashboardIconName; end?: boolean }>
+}> = [
+  {
+    section: 'Tổng quan',
+    items: [{ to: '/', label: 'Dashboard', icon: 'dashboard', end: true }],
+  },
+  {
+    section: 'Quản lý',
+    items: [
+      { to: '/transactions', label: 'Giao dịch', icon: 'transactions' },
+      { to: '/categories', label: 'Danh mục', icon: 'categories' },
+      { to: '/budget', label: 'Ngân sách', icon: 'budget' },
+      { to: '/assets', label: 'Tài sản', icon: 'assets' },
+      { to: '/reports', label: 'Báo cáo', icon: 'reports' },
+    ],
+  },
+  {
+    section: 'Hệ thống',
+    items: [{ to: '/settings', label: 'Cài đặt', icon: 'settings' }],
+  },
+]
+
+function DashboardLayout({ userName, userEmail, avatarLetter, onSignOut, isSettings }: DashboardLayoutProps) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const mobileToggleRef = useRef<HTMLButtonElement>(null)
+  const mobileSidebarRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const focusableSelector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+    const focusFirstItem = () => {
+      mobileSidebarRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus()
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMobileNavOpen(false)
+        return
+      }
+
+      if (event.key !== 'Tab' || !mobileSidebarRef.current) return
+
+      const focusable = Array.from(
+        mobileSidebarRef.current.querySelectorAll<HTMLElement>(focusableSelector),
+      )
+      if (focusable.length === 0) return
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    focusFirstItem()
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+      mobileToggleRef.current?.focus()
+    }
+  }, [mobileNavOpen])
+
+  const closeMobileNav = () => setMobileNavOpen(false)
+
+  return (
+    <div className="db-app">
+      <aside
+        ref={mobileSidebarRef}
+        className={`db-sidebar${mobileNavOpen ? ' is-open' : ''}`}
+        aria-label="Điều hướng chính"
+      >
+        <div className="db-brand">
+          <div className="db-brand-logo" aria-hidden="true">
+            <DashboardIcon name="assets" />
+          </div>
+          <div>
+            <div className="db-brand-name">Personal Finance</div>
+            <div className="db-brand-sub">Quản lý tài chính</div>
+          </div>
+        </div>
+
+        <nav className="db-nav">
+          {DASHBOARD_NAV.map((group, groupIndex) => (
+            <div className="db-nav-group" key={group.section ?? `group-${groupIndex}`}>
+              {group.section && <div className="db-nav-label">{group.section}</div>}
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className="db-nav-item"
+                  onClick={closeMobileNav}
+                >
+                  <DashboardIcon name={item.icon} />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div className="db-user">
+          <div className="db-avatar" aria-hidden="true">{avatarLetter}</div>
+          <div className="db-user-copy">
+            <div className="db-user-name">{userName}</div>
+            <div className="db-user-mail">{userEmail}</div>
+          </div>
+          <button
+            type="button"
+            className="db-logout"
+            onClick={onSignOut}
+            title="Đăng xuất"
+            aria-label="Đăng xuất"
+          >
+            <DashboardIcon name="logout" size={16} />
+          </button>
+        </div>
+      </aside>
+
+      {mobileNavOpen && (
+        <button
+          type="button"
+          className="db-sidebar-backdrop"
+          aria-label="Đóng menu"
+          onClick={closeMobileNav}
+        />
+      )}
+
+      <div className={`db-main${isSettings ? ' db-main--settings' : ''}`}>
+        <button
+          type="button"
+          ref={mobileToggleRef}
+          className="db-mobile-toggle"
+          aria-label={mobileNavOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen((open) => !open)}
+        >
+          <span aria-hidden="true">{mobileNavOpen ? '×' : '☰'}</span>
+        </button>
+        <Outlet />
       </div>
     </div>
   )

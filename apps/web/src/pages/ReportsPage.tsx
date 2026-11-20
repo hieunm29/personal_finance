@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import type { MonthlyOverview, ReportInsight, ReportPeriodOverview, ReportTabId } from '@pf/shared'
-import { useNavigate } from 'react-router'
 import {
   useAnnualSummary,
   useAssetAllocation,
@@ -15,7 +13,6 @@ import {
   useReportProfile,
   useTopExpenses,
 } from '../hooks/useReports'
-import { authClient } from '../lib/auth-client'
 import { formatCurrency, formatDate } from '../utils/format'
 import AnnualBarChart from '../components/reports/AnnualBarChart'
 import AssetAllocationChart from '../components/reports/AssetAllocationChart'
@@ -726,28 +723,11 @@ function ReportTabs({ activeTab, onChange }: { activeTab: ReportTabId; onChange:
 }
 
 export default function ReportsPage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<ReportTabId>('overview')
   const [period, setPeriod] = useState(() => getPresetPeriod('this_month'))
   const [assetHistoryPeriod, setAssetHistoryPeriod] = useState<AssetHistoryPeriod>('12')
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const mobileToggle = useRef<HTMLButtonElement>(null)
   const profile = useReportProfile()
   const exportReport = useExportReport()
-  useEffect(() => {
-    if (!mobileNavOpen) return
-    const toggle = mobileToggle.current
-    document.querySelector<HTMLElement>('aside nav a[href]')?.focus()
-    function handleKey(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setMobileNavOpen(false)
-        toggle?.focus()
-      }
-    }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [mobileNavOpen])
   const exportMenu = useRef<HTMLDetailsElement>(null)
   const { startDate, endDate } = period
   const [year, month] = endDate.split('-').map(Number)
@@ -784,12 +764,6 @@ export default function ReportsPage() {
     && shownQueries.every(query => query.isSuccess && query.fetchStatus === 'idle')
   const currency = profile.data?.currency
 
-  async function signOut() {
-    await authClient.signOut()
-    queryClient.clear()
-    navigate('/login')
-  }
-
   function navigateMonth(startDate: string | null) {
     if (startDate) setPeriod(getNavigatedPeriod(startDate, today))
   }
@@ -816,26 +790,12 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className={`reports-shell finance-reports${mobileNavOpen ? ' reports-mobile-nav-open' : ''}`}>
+    <div className="reports-shell finance-reports">
       <header className="reports-page-header">
         <div className="reports-page-heading">
           <h1>Báo cáo</h1>
           <p>Phân tích thu chi, ngân sách và tài sản theo kỳ</p>
         </div>
-
-        <button
-          type="button"
-          ref={mobileToggle}
-          className="reports-mobile-nav reports-print-hide"
-          aria-label={mobileNavOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
-          aria-expanded={mobileNavOpen}
-          onClick={() => {
-            if (mobileNavOpen) mobileToggle.current?.focus()
-            setMobileNavOpen(!mobileNavOpen)
-          }}
-        >
-          <ReportIcon path={mobileNavOpen ? 'm5 5 14 14M19 5 5 19' : 'M4 6h16M4 12h16M4 18h16'} />
-        </button>
 
         <div className="reports-page-actions reports-print-hide">
           <div className="reports-month-nav" role="group" aria-label="Điều hướng theo tháng">
@@ -869,9 +829,6 @@ export default function ReportsPage() {
               <button type="button" onClick={printReport} disabled={!canPrint}>In / Lưu PDF</button>
             </div>
           </details>
-          <button type="button" className="reports-sign-out" onClick={signOut} aria-label="Đăng xuất" title="Đăng xuất">
-            <ReportIcon path="M10 4H4v16h6m0-8h11m-4-4 4 4-4 4" />
-          </button>
         </div>
       </header>
 

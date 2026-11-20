@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router'
 import { type TransactionWithRelations } from '@pf/shared'
-import { formatCurrency, formatDate } from '../../utils/format'
+import { formatCurrency } from '../../utils/format'
+import TransactionCategoryIcon from '../transaction/TransactionCategoryIcon'
+import './dashboard-details.css'
 
 interface Props {
   transactions: TransactionWithRelations[]
@@ -8,61 +10,86 @@ interface Props {
   onEditTransaction: (id: string) => void
 }
 
+interface TransactionGroup {
+  label: string
+  items: TransactionWithRelations[]
+}
+
+function dateKey(date: string): string {
+  return date.slice(0, 10)
+}
+
+function groupLabel(date: string): string {
+  const target = new Date(`${dateKey(date)}T00:00:00`)
+  const today = new Date()
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const dayDiff = Math.round((current.getTime() - target.getTime()) / 86_400_000)
+  if (dayDiff === 0) return 'Hôm nay'
+  if (dayDiff === 1) return 'Hôm qua'
+  if (dayDiff >= 2 && dayDiff < 7) return 'Tuần này'
+  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(target)
+}
+
+function groupTransactions(transactions: TransactionWithRelations[]): TransactionGroup[] {
+  const groups: TransactionGroup[] = []
+  const byLabel = new Map<string, TransactionGroup>()
+  for (const transaction of transactions) {
+    const key = groupLabel(transaction.date)
+    let group = byLabel.get(key)
+    if (!group) {
+      group = { label: groupLabel(transaction.date), items: [] }
+      byLabel.set(key, group)
+      groups.push(group)
+    }
+    group.items.push(transaction)
+  }
+  return groups
+}
+
 export default function RecentTransactionsList({ transactions, currency, onEditTransaction }: Props) {
   const navigate = useNavigate()
+  const groups = groupTransactions(transactions)
+
+  const handleTransaction = (transaction: TransactionWithRelations) => {
+    if (transaction.type === 'transfer') {
+      navigate('/transactions')
+      return
+    }
+    onEditTransaction(transaction.id)
+  }
 
   if (transactions.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 font-semibold text-gray-800">Giao dịch gần đây</h3>
-        <p className="text-center text-sm text-gray-400">
-          Chưa có giao dịch.{' '}
-          <button onClick={() => navigate('/transactions')} className="text-blue-500 underline">
-            Thêm giao dịch đầu tiên →
-          </button>
-        </p>
-      </div>
+      <section className="db-card db-detail-transactions" aria-label="Giao dịch gần đây">
+      <div className="db-card-head"><div><h2 className="db-card-title">Giao dịch gần đây</h2><p className="db-card-sub">{transactions.length} giao dịch mới nhất</p></div><button type="button" className="db-link" onClick={() => navigate('/transactions')}>Xem tất cả →</button></div>
+        <div className="db-empty">Chưa có giao dịch. <button type="button" className="db-link" onClick={() => navigate('/transactions')}>Thêm giao dịch đầu tiên →</button></div>
+      </section>
     )
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-6 py-4">
-        <h3 className="font-semibold text-gray-800">Giao dịch gần đây</h3>
-      </div>
-      <ul className="divide-y divide-gray-50">
-        {transactions.map((txn) => (
-          <li
-            key={txn.id}
-            onClick={() => onEditTransaction(txn.id)}
-            className="flex cursor-pointer items-center gap-3 px-6 py-3 hover:bg-gray-50"
-          >
-            <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-              style={{ backgroundColor: txn.category?.color ?? '#9ca3af' }}
-            >
-              {(txn.category?.name ?? '?')[0]}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-gray-800">
-                {txn.category?.name ?? 'Không phân loại'}
-              </p>
-              {txn.note && <p className="truncate text-xs text-gray-400">{txn.note}</p>}
-            </div>
-            <div className="text-right">
-              <p className={`text-sm font-semibold ${txn.type === 'income' ? 'text-green-600' : txn.type === 'transfer' ? 'text-gray-500' : 'text-red-600'}`}>
-                {txn.type === 'income' ? '+' : txn.type === 'transfer' ? '' : '-'}{formatCurrency(txn.amount, currency)}
-              </p>
-              <p className="text-xs text-gray-400">{formatDate(txn.date)}</p>
-            </div>
-          </li>
+    <section className="db-card db-detail-transactions" aria-label="Giao dịch gần đây">
+      <div className="db-card-head"><div><h2 className="db-card-title">Giao dịch gần đây</h2><p className="db-card-sub">{transactions.length} giao dịch mới nhất</p></div><button type="button" className="db-link" onClick={() => navigate('/transactions')}>Xem tất cả <span aria-hidden="true">→</span></button></div>
+      <div className="db-detail-transaction-list">
+        {groups.map((group, groupIndex) => (
+          <div key={`${group.label}-${groupIndex}`} className="db-detail-transaction-group">
+            <h3 className="db-detail-transaction-date">{group.label}</h3>
+            {group.items.map((transaction) => {
+              const isIncome = transaction.type === 'income'
+              const isTransfer = transaction.type === 'transfer'
+              const amountPrefix = isIncome ? '+' : isTransfer ? '' : '−'
+              const amountClass = isIncome ? 'db-detail-positive' : isTransfer ? '' : 'db-detail-expense'
+              return (
+                <button key={transaction.id} type="button" className="db-detail-transaction" onClick={() => handleTransaction(transaction)} aria-label={`${transaction.category?.name ?? 'Giao dịch'}, ${formatCurrency(transaction.amount, currency)}`}>
+                  <span className={`db-detail-transaction-icon ${isIncome ? 'is-income' : isTransfer ? 'is-transfer' : 'is-expense'}`} aria-hidden="true">{isTransfer ? '⇄' : <TransactionCategoryIcon icon={transaction.category?.icon ?? (isIncome ? 'briefcase' : 'wallet')} name={transaction.category?.name} size={18} />}</span>
+                  <span className="db-detail-transaction-body"><span className="db-detail-transaction-name">{transaction.note || transaction.category?.name || 'Giao dịch'}</span><span className="db-detail-transaction-meta">{transaction.category?.name ?? 'Không phân loại'}{transaction.wallet?.name ? ` · ${transaction.wallet.name}` : ''}</span></span>
+                  <span className={`db-detail-transaction-amount ${amountClass}`}>{amountPrefix}{formatCurrency(transaction.amount, currency)}</span>
+                </button>
+              )
+            })}
+          </div>
         ))}
-      </ul>
-      <div className="border-t border-gray-100 px-6 py-3 text-right">
-        <button onClick={() => navigate('/transactions')} className="text-sm text-blue-500 hover:text-blue-700">
-          Xem tất cả →
-        </button>
       </div>
-    </div>
+    </section>
   )
 }

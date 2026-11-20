@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — Personal Finance (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F6F7FB;
+    --surface: #FFFFFF;
+    --border: #E5E7EF;
+    --text: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --brand: #4F46E5;
+    --brand-soft: #EEF2FF;
+    --income: #059669;
+    --income-soft: #ECFDF5;
+    --expense: #DC2626;
+    --expense-soft: #FEF2F2;
+    --warn: #D97706;
+    --warn-soft: #FFFBEB;
+    --info: #2563EB;
+    --info-soft: #EFF6FF;
+    --radius: 16px;
+    --shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 16px rgba(15,23,42,.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* ── Layout ───────────────────────────── */
+  .app { display: grid; grid-template-columns: 248px minmax(0,1fr); min-height: 100vh; }
+  .sidebar {
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 20px; border-bottom: 1px solid var(--border); }
+  .brand-logo {
+    width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+    background: linear-gradient(135deg, #6366F1, #4338CA); color: #fff;
+  }
+  .brand-name { font-weight: 700; font-size: 15px; }
+  .brand-sub { font-size: 12px; color: var(--subtle); }
+  .nav { padding: 12px; flex: 1; }
+  .nav-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--subtle); padding: 12px 12px 6px; }
+  .nav a {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
+    color: var(--muted); text-decoration: none; font-weight: 500; cursor: pointer;
+    transition: background-color .2s, color .2s;
+  }
+  .nav a:hover { background: #F1F5F9; color: var(--text); }
+  .nav a.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+  .nav a:focus-visible, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .user { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--border); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; font-weight: 600; }
+  .user-name { font-weight: 600; font-size: 13px; }
+  .user-mail { font-size: 12px; color: var(--subtle); }
+
+  .main { min-width: 0; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 20px 32px; background: rgba(246,247,251,.85); backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--border);
+  }
+  .greet h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+  .greet p { color: var(--subtle); font-size: 13px; }
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px;
+    border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font: inherit; font-weight: 500; cursor: pointer;
+    transition: background-color .2s, border-color .2s;
+  }
+  .btn:hover { background: #F8FAFC; border-color: #CBD5E1; }
+  .btn-icon { width: 40px; padding: 0; justify-content: center; position: relative; }
+  .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .btn-primary:hover { background: #4338CA; border-color: #4338CA; }
+  .dot { position: absolute; top: 9px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--expense); border: 2px solid #fff; }
+
+  .content { padding: 24px 32px 48px; max-width: 1360px; display: grid; gap: 20px; }
+  .row { display: grid; gap: 20px; }
+  .row-hero { grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); }
+  .row-kpi { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .row-chart { grid-template-columns: minmax(0,1.75fr) minmax(0,1fr); }
+  .row-bottom { grid-template-columns: repeat(3, minmax(0,1fr)); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; min-width: 0; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .card-sub { font-size: 12px; color: var(--subtle); }
+  .link { color: var(--brand); font-weight: 500; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  .link:hover { text-decoration: underline; }
+
+  /* ── Net worth hero ───────────────────── */
+  .networth {
+    background: radial-gradient(120% 140% at 100% 0%, #6366F1 0%, #4338CA 45%, #312E81 100%);
+    color: #fff; border: none; padding: 24px; position: relative; overflow: hidden;
+  }
+  .networth .label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #C7D2FE; font-weight: 500; }
+  .networth .value { font-size: 40px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 4px; }
+  .networth .delta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; background: rgba(255,255,255,.14); padding: 4px 10px; border-radius: 999px; }
+  .networth .delta b { color: #6EE7B7; font-weight: 600; }
+  .nw-top { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+  .nw-spark { width: 300px; max-width: 45%; height: 72px; }
+  .alloc { margin-top: 22px; }
+  .alloc-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; gap: 3px; }
+  .alloc-bar span { display: block; height: 100%; }
+  .alloc-legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 14px; }
+  .alloc-legend div { font-size: 12px; color: #C7D2FE; }
+  .alloc-legend strong { display: block; color: #fff; font-size: 14px; font-weight: 600; }
+  .nw-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.16); }
+  .nw-stats div { font-size: 12px; color: #C7D2FE; }
+  .nw-stats strong { display: block; color: #fff; font-size: 14px; font-weight: 600; }
+  .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+
+  /* ── Health ───────────────────────────── */
+  .health-grid { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; }
+  .ring { position: relative; width: 132px; height: 132px; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .ring-center strong { font-size: 28px; font-weight: 700; display: block; line-height: 1; }
+  .ring-center span { font-size: 11px; color: var(--subtle); }
+  .metrics { display: grid; gap: 14px; }
+  .metric-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .metric-top b { color: var(--text); font-weight: 600; }
+  .bar { height: 8px; background: #EEF0F5; border-radius: 999px; overflow: hidden; position: relative; }
+  .bar > span { display: block; height: 100%; border-radius: 999px; }
+  .bar .marker { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--text); border-radius: 2px; }
+  .hint { font-size: 12px; color: var(--subtle); margin-top: 4px; }
+  .badge { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .badge.good { background: var(--income-soft); color: var(--income); }
+  .badge.bad { background: var(--expense-soft); color: var(--expense); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+
+  /* ── KPI ──────────────────────────────── */
+  .kpi { display: flex; flex-direction: column; gap: 10px; }
+  .kpi-head { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 500; }
+  .kpi-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; }
+  .kpi-val { font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+  .kpi-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .kpi-foot .card-sub { white-space: nowrap; }
+  .kpi svg.spark { width: 84px; height: 28px; }
+
+  /* ── Charts ───────────────────────────── */
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; }
+  .seg { display: inline-flex; background: #F1F5F9; border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: transparent; font: inherit; font-size: 12px; font-weight: 500; color: var(--muted); padding: 6px 10px; border-radius: 8px; cursor: pointer; transition: background-color .2s, color .2s; }
+  .seg button.on { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart text { font-family: inherit; font-size: 11px; fill: var(--subtle); }
+  .chart-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+  .chart-summary div { font-size: 12px; color: var(--subtle); }
+  .chart-summary strong { display: block; font-size: 15px; color: var(--text); font-weight: 600; }
+
+  .donut-wrap { display: flex; align-items: center; gap: 20px; }
+  .donut { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
+  .donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .donut-center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .donut-center strong { font-size: 16px; font-weight: 700; display: block; }
+  .donut-center span { font-size: 11px; color: var(--subtle); }
+  .cat-list { list-style: none; display: grid; gap: 10px; flex: 1; min-width: 0; }
+  .cat-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .cat-list .name { display: flex; align-items: center; color: var(--muted); }
+  .cat-list .amt { font-weight: 600; }
+  .cat-list .pct { color: var(--subtle); font-weight: 400; margin-left: 6px; font-size: 12px; }
+
+  /* ── Budget ───────────────────────────── */
+  .budget-list { display: grid; gap: 16px; }
+  .budget-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  .budget-top .nm { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .budget-top .val { color: var(--subtle); }
+  .budget-top .val b { color: var(--text); font-weight: 600; }
+
+  /* ── Transactions ─────────────────────── */
+  .tx-list { list-style: none; }
+  .tx { display: flex; align-items: center; gap: 12px; padding: 10px 8px; margin: 0 -8px; border-radius: 10px; cursor: pointer; transition: background-color .2s; }
+  .tx:hover { background: #F8FAFC; }
+  .tx-ico { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
+  .tx-body { flex: 1; min-width: 0; }
+  .tx-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-meta { font-size: 12px; color: var(--subtle); }
+  .tx-amt { font-weight: 600; white-space: nowrap; }
+  .tx-date { font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--subtle); padding: 10px 0 2px; text-transform: uppercase; }
+
+  /* ── Insights ─────────────────────────── */
+  .insights { display: grid; gap: 12px; }
+  .insight { display: flex; gap: 12px; padding: 14px; border-radius: 12px; border: 1px solid; }
+  .insight.warn { background: var(--warn-soft); border-color: #FDE68A; }
+  .insight.bad { background: var(--expense-soft); border-color: #FECACA; }
+  .insight.good { background: var(--income-soft); border-color: #A7F3D0; }
+  .insight.info { background: var(--info-soft); border-color: #BFDBFE; }
+  .insight .t { font-weight: 600; font-size: 13px; }
+  .insight .d { font-size: 12px; color: var(--muted); }
+  .insight .link { font-size: 12px; margin-top: 4px; }
+
+  .mockup-note { font-size: 12px; color: var(--subtle); text-align: center; }
+
+  /* ── Responsive ───────────────────────── */
+  @media (max-width: 1280px) {
+    .row-bottom { grid-template-columns: 1fr 1fr; }
+    .row-bottom .insights-card { grid-column: span 2; }
+    .insights { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 1100px) {
+    .row-hero, .row-chart { grid-template-columns: minmax(0,1fr); }
+    .row-kpi { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: minmax(0,1fr); }
+    .sidebar { display: none; }
+    .topbar { padding: 16px; }
+    .content { padding: 16px 16px 40px; }
+    .row-bottom { grid-template-columns: minmax(0,1fr); }
+    .row-bottom .insights-card { grid-column: auto; }
+    .insights { grid-template-columns: 1fr; }
+    .btn-label { display: none; }
+  }
+  @media (max-width: 560px) {
+    .row-kpi { grid-template-columns: minmax(0,1fr); }
+    .networth .value { font-size: 32px; }
+    .nw-top { flex-direction: column; }
+    .nw-spark { max-width: 100%; width: 100%; }
+    .alloc-legend, .nw-stats { grid-template-columns: repeat(2, 1fr); }
+    .chart-summary { grid-template-columns: 1fr 1fr; }
+    .actions .btn:first-child { display: none; }
+    .health-grid { grid-template-columns: 1fr; justify-items: center; }
+    .metrics { width: 100%; }
+    .donut-wrap { flex-direction: column; align-items: stretch; }
+    .donut { margin: 0 auto; }
+    .greet p { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- Icon sprite (Lucide) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m7 17 10-10M7 7h10v10"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7v10H7"/></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M3 7h18M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-piggy" viewBox="0 0 24 24"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-food" viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10l-2.7-3.6A2 2 0 0 0 13.7 6H8.3a2 2 0 0 0-1.6.9L4 10l-1.5.6C1.7 11 1 11.7 1 12.6V16c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 17h6"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.7 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ═══ Sidebar ═══ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><svg class="i"><use href="#i-wallet"/></svg></div>
+      <div><div class="brand-name">Personal Finance</div><div class="brand-sub">Quản lý tài chính</div></div>
+    </div>
+    <nav class="nav" aria-label="Điều hướng chính">
+      <div class="nav-label">TỔNG QUAN</div>
+      <a class="active" href="#" aria-current="page"><svg class="i"><use href="#i-dashboard"/></svg>Dashboard</a>
+      <div class="nav-label">QUẢN LÝ</div>
+      <a href="#"><svg class="i"><use href="#i-swap"/></svg>Giao dịch</a>
+      <a href="#"><svg class="i"><use href="#i-tag"/></svg>Danh mục</a>
+      <a href="#"><svg class="i"><use href="#i-target"/></svg>Ngân sách</a>
+      <a href="#"><svg class="i"><use href="#i-wallet"/></svg>Tài sản</a>
+      <a href="#"><svg class="i"><use href="#i-chart"/></svg>Báo cáo</a>
+      <div class="nav-label">HỆ THỐNG</div>
+      <a href="#"><svg class="i"><use href="#i-settings"/></svg>Cài đặt</a>
+    </nav>
+    <div class="user">
+      <div class="avatar">H</div>
+      <div style="min-width:0;flex:1"><div class="user-name">hieunm29</div><div class="user-mail">hieunm29@gmail.com</div></div>
+      <button class="btn btn-icon" aria-label="Đăng xuất" style="width:34px;height:34px"><svg class="i" style="width:16px;height:16px"><use href="#i-logout"/></svg></button>
+    </div>
+  </aside>
+
+  <!-- ═══ Main ═══ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="greet">
+        <h1>Chào buổi tối, Hiếu</h1>
+        <p>Thứ Bảy, 24/10/2026 · Còn 7 ngày nữa hết tháng</p>
+      </div>
+      <div class="actions">
+        <button class="btn" aria-label="Chọn kỳ"><svg class="i"><use href="#i-calendar"/></svg><span class="btn-label">Tháng 10/2026</span><svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></button>
+        <button class="btn btn-icon" aria-label="Thông báo (3 mới)"><svg class="i"><use href="#i-bell"/></svg><span class="dot"></span></button>
+        <button class="btn btn-primary"><svg class="i"><use href="#i-plus"/></svg><span class="btn-label">Thêm giao dịch</span></button>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ── Row 1: Net worth + Financial health ── -->
+      <section class="row row-hero">
+        <article class="card networth" aria-label="Tổng tài sản">
+          <div class="nw-top">
+            <div>
+              <div class="label"><svg class="i" style="width:16px;height:16px"><use href="#i-shield"/></svg>Tổng tài sản ròng</div>
+              <div class="value num">369.050.000 ₫</div>
+              <span class="delta num"><b>▲ +10.850.000 ₫ (+3,0%)</b> so với tháng trước</span>
+            </div>
+            <svg class="nw-spark" viewBox="0 0 300 72" preserveAspectRatio="none" aria-label="Xu hướng tài sản 12 tháng">
+              <defs>
+                <linearGradient id="nwfill" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#A5B4FC" stop-opacity=".55"/>
+                  <stop offset="1" stop-color="#A5B4FC" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,56 L27,54 L54,51 L81,53 L109,46 L136,44 L163,41 L190,37 L218,33 L245,28 L272,23 L300,12 L300,72 L0,72Z" fill="url(#nwfill)"/>
+              <path d="M0,56 L27,54 L54,51 L81,53 L109,46 L136,44 L163,41 L190,37 L218,33 L245,28 L272,23 L300,12" fill="none" stroke="#E0E7FF" stroke-width="2.5" stroke-linejoin="round"/>
+              <circle cx="296" cy="13" r="4" fill="#fff"/>
+            </svg>
+          </div>
+          <div class="alloc">
+            <div class="alloc-bar" role="img" aria-label="Phân bổ tài sản">
+              <span style="width:48.8%;background:#A5B4FC"></span>
+              <span style="width:25.7%;background:#FCD34D"></span>
+              <span style="width:17.4%;background:#6EE7B7"></span>
+              <span style="width:8.1%;background:#F9A8D4"></span>
+            </div>
+            <div class="alloc-legend num">
+              <div><span class="sw" style="background:#A5B4FC"></span>Tiết kiệm · 49%<strong>180.000.000 ₫</strong></div>
+              <div><span class="sw" style="background:#FCD34D"></span>Vàng · 26%<strong>95.000.000 ₫</strong></div>
+              <div><span class="sw" style="background:#6EE7B7"></span>Chứng khoán · 17%<strong>64.050.000 ₫</strong></div>
+              <div><span class="sw" style="background:#F9A8D4"></span>Tiền mặt · 8%<strong>30.000.000 ₫</strong></div>
+            </div>
+          </div>
+          <div class="nw-stats num">
+            <div>12 tháng qua<strong>+58.300.000 ₫ (+18,8%)</strong></div>
+            <div>Lãi/lỗ đầu tư<strong>+4.050.000 ₫</strong></div>
+            <div>Cập nhật giá<strong>Hôm nay, 21:00</strong></div>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Sức khỏe tài chính">
+          <div class="card-head">
+            <div><div class="card-title">Sức khỏe tài chính</div><div class="card-sub">Tháng 10/2026</div></div>
+            <span class="badge good"><svg class="i" style="width:14px;height:14px"><use href="#i-check"/></svg>Tốt</span>
+          </div>
+          <div class="health-grid">
+            <div class="ring" role="img" aria-label="Tỷ lệ tiết kiệm 54%">
+              <svg viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#EEF0F5" stroke-width="12"/>
+                <circle cx="60" cy="60" r="50" fill="none" stroke="url(#ringg)" stroke-width="12" stroke-linecap="round" stroke-dasharray="170.9 314.2"/>
+                <defs><linearGradient id="ringg"><stop offset="0" stop-color="#10B981"/><stop offset="1" stop-color="#059669"/></linearGradient></defs>
+              </svg>
+              <div class="ring-center"><div><strong class="num">54%</strong><span>tỷ lệ tiết kiệm</span></div></div>
+            </div>
+            <div class="metrics">
+              <div>
+                <div class="metric-top"><span>Ngân sách đã dùng</span><b class="num">76%</b></div>
+                <div class="bar"><span style="width:76%;background:var(--brand)"></span><i class="marker" style="left:77%" title="Thời gian đã qua trong tháng"></i></div>
+                <div class="hint num">11,4 / 15 triệu · đúng nhịp chi tiêu</div>
+              </div>
+              <div>
+                <div class="metric-top"><span>Quỹ dự phòng</span><b class="num">16 tháng</b></div>
+                <div class="bar"><span style="width:100%;background:var(--income)"></span></div>
+                <div class="hint">Mục tiêu tối thiểu: 6 tháng chi tiêu</div>
+              </div>
+              <div>
+                <div class="metric-top"><span>Danh mục vượt ngân sách</span><b class="num" style="color:var(--expense)">1 / 5</b></div>
+                <div class="hint">Mua sắm vượt 400.000 ₫</div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ── Row 2: KPI ── -->
+      <section class="row row-kpi" aria-label="Chỉ số tháng này">
+        <article class="card kpi">
+          <div class="kpi-head"><span class="kpi-ico" style="background:var(--income-soft);color:var(--income)"><svg class="i"><use href="#i-in"/></svg></span>Thu nhập</div>
+          <div class="kpi-val num">25.000.000 ₫</div>
+          <div class="kpi-foot">
+            <span class="badge good num"><svg class="i" style="width:12px;height:12px"><use href="#i-up"/></svg>4,2%</span>
+            <span class="card-sub">vs tháng 9</span>
+            <svg class="spark" viewBox="0 0 84 28"><polyline points="2,22 18,22 34,17 50,15 66,15 82,6" fill="none" stroke="#059669" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          </div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-head"><span class="kpi-ico" style="background:var(--expense-soft);color:var(--expense)"><svg class="i"><use href="#i-out"/></svg></span>Chi tiêu</div>
+          <div class="kpi-val num">11.400.000 ₫</div>
+          <div class="kpi-foot">
+            <span class="badge good num"><svg class="i" style="width:12px;height:12px"><use href="#i-down"/></svg>10,9%</span>
+            <span class="card-sub">vs tháng 9</span>
+            <svg class="spark" viewBox="0 0 84 28"><polyline points="2,12 18,17 34,4 50,20 66,16 82,22" fill="none" stroke="#DC2626" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          </div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-head"><span class="kpi-ico" style="background:var(--info-soft);color:var(--info)"><svg class="i"><use href="#i-scale"/></svg></span>Dòng tiền ròng</div>
+          <div class="kpi-val num" style="color:var(--income)">+13.600.000 ₫</div>
+          <div class="kpi-foot">
+            <span class="badge good num"><svg class="i" style="width:12px;height:12px"><use href="#i-up"/></svg>21,4%</span>
+            <span class="card-sub">vs tháng 9</span>
+            <svg class="spark" viewBox="0 0 84 28"><polyline points="2,20 18,15 34,21 50,9 66,12 82,4" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          </div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-head"><span class="kpi-ico" style="background:var(--brand-soft);color:var(--brand)"><svg class="i"><use href="#i-piggy"/></svg></span>Chi tiêu TB / ngày</div>
+          <div class="kpi-val num">475.000 ₫</div>
+          <div class="kpi-foot">
+            <span class="badge warn num">Còn 514.000 ₫/ngày</span>
+            <span class="card-sub">giới hạn an toàn</span>
+          </div>
+        </article>
+      </section>
+
+      <!-- ── Row 3: Cashflow chart + Category breakdown ── -->
+      <section class="row row-chart">
+        <article class="card chart">
+          <div class="card-head">
+            <div><div class="card-title">Dòng tiền 6 tháng</div><div class="card-sub">Thu nhập, chi tiêu và phần tiết kiệm được mỗi tháng</div></div>
+            <div class="seg" role="tablist"><button class="on" role="tab" aria-selected="true">6T</button><button role="tab">12T</button><button role="tab">Năm</button></div>
+          </div>
+          <div class="legend" style="margin-bottom:8px">
+            <span><span class="sw" style="background:#10B981"></span>Thu nhập</span>
+            <span><span class="sw" style="background:#F87171"></span>Chi tiêu</span>
+            <span><span class="sw" style="background:#4F46E5;border-radius:50%"></span>Tiết kiệm (ròng)</span>
+          </div>
+          <svg viewBox="0 0 640 236" role="img" aria-label="Biểu đồ thu chi 6 tháng">
+            <!-- grid -->
+            <g stroke="#EEF0F5">
+              <line x1="48" x2="624" y1="16" y2="16"/><line x1="48" x2="624" y1="80" y2="80"/>
+              <line x1="48" x2="624" y1="144" y2="144"/><line x1="48" x2="624" y1="208" y2="208" stroke="#CBD5E1"/>
+            </g>
+            <g text-anchor="end">
+              <text x="40" y="20">30tr</text><text x="40" y="84">20tr</text><text x="40" y="148">10tr</text><text x="40" y="212">0</text>
+            </g>
+            <!-- bars -->
+            <g fill="#10B981">
+              <rect x="72" y="67.2" width="22" height="140.8" rx="4"/><rect x="168" y="67.2" width="22" height="140.8" rx="4"/>
+              <rect x="264" y="57.6" width="22" height="150.4" rx="4"/><rect x="360" y="54.4" width="22" height="153.6" rx="4"/>
+              <rect x="456" y="54.4" width="22" height="153.6" rx="4"/><rect x="552" y="48" width="22" height="160" rx="4"/>
+            </g>
+            <g fill="#F87171">
+              <rect x="98" y="117.1" width="22" height="90.9" rx="4"/><rect x="194" y="127.4" width="22" height="80.6" rx="4"/>
+              <rect x="290" y="106.9" width="22" height="101.1" rx="4"/><rect x="386" y="131.8" width="22" height="76.2" rx="4"/>
+              <rect x="482" y="126.1" width="22" height="81.9" rx="4"/><rect x="578" y="135" width="22" height="73" rx="4"/>
+            </g>
+            <!-- current month highlight -->
+            <rect x="540" y="10" width="72" height="202" rx="8" fill="#4F46E5" opacity=".05"/>
+            <!-- net line -->
+            <polyline points="96,158.1 192,147.8 288,158.7 384,130.6 480,136.3 576,121" fill="none" stroke="#4F46E5" stroke-width="2.5" stroke-linejoin="round"/>
+            <g fill="#fff" stroke="#4F46E5" stroke-width="2">
+              <circle cx="96" cy="158.1" r="4"/><circle cx="192" cy="147.8" r="4"/><circle cx="288" cy="158.7" r="4"/>
+              <circle cx="384" cy="130.6" r="4"/><circle cx="480" cy="136.3" r="4"/><circle cx="576" cy="121" r="5" fill="#4F46E5"/>
+            </g>
+            <!-- tooltip for current month -->
+            <g transform="translate(446,70)">
+              <rect width="124" height="40" rx="8" fill="#0F172A"/>
+              <text x="10" y="16" style="fill:#94A3B8;font-size:10px">Tháng 10 · Tiết kiệm</text>
+              <text x="10" y="32" style="fill:#fff;font-size:12px;font-weight:600">+13,6 triệu ₫</text>
+            </g>
+            <!-- x labels -->
+            <g text-anchor="middle">
+              <text x="96" y="228">T5</text><text x="192" y="228">T6</text><text x="288" y="228">T7</text>
+              <text x="384" y="228">T8</text><text x="480" y="228">T9</text><text x="576" y="228" style="fill:#4F46E5;font-weight:600">T10</text>
+            </g>
+          </svg>
+          <div class="chart-summary num">
+            <div>Tổng thu 6 tháng<strong>140.500.000 ₫</strong></div>
+            <div>Tổng chi 6 tháng<strong>78.700.000 ₫</strong></div>
+            <div>Tiết kiệm TB / tháng<strong style="color:var(--income)">+10.300.000 ₫</strong></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div><div class="card-title">Chi tiêu theo danh mục</div><div class="card-sub">Tháng 10/2026</div></div>
+            <a class="link" href="#">Báo cáo <svg class="i" style="width:14px;height:14px"><use href="#i-arrow-right"/></svg></a>
+          </div>
+          <div class="donut-wrap">
+            <div class="donut" role="img" aria-label="Cơ cấu chi tiêu">
+              <svg viewBox="0 0 140 140">
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#EEF0F5" stroke-width="18"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#6366F1" stroke-width="18" stroke-dasharray="116.8 339.3" stroke-dashoffset="0"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#F59E0B" stroke-width="18" stroke-dasharray="93 339.3" stroke-dashoffset="-118.8"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#06B6D4" stroke-width="18" stroke-dasharray="42.1 339.3" stroke-dashoffset="-213.8"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#EC4899" stroke-width="18" stroke-dasharray="38.7 339.3" stroke-dashoffset="-257.9"/>
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#94A3B8" stroke-width="18" stroke-dasharray="38.7 339.3" stroke-dashoffset="-298.6"/>
+              </svg>
+              <div class="donut-center"><div><strong class="num">11,4tr</strong><span>tổng chi</span></div></div>
+            </div>
+            <ul class="cat-list num">
+              <li><span class="name"><span class="sw" style="background:#6366F1"></span>Nhà ở</span><span class="amt">4,0tr<span class="pct">35%</span></span></li>
+              <li><span class="name"><span class="sw" style="background:#F59E0B"></span>Ăn uống</span><span class="amt">3,2tr<span class="pct">28%</span></span></li>
+              <li><span class="name"><span class="sw" style="background:#06B6D4"></span>Di chuyển</span><span class="amt">1,5tr<span class="pct">13%</span></span></li>
+              <li><span class="name"><span class="sw" style="background:#EC4899"></span>Mua sắm</span><span class="amt">1,4tr<span class="pct">12%</span></span></li>
+              <li><span class="name"><span class="sw" style="background:#94A3B8"></span>Khác</span><span class="amt">1,3tr<span class="pct">12%</span></span></li>
+            </ul>
+          </div>
+          <div class="insight info" style="margin-top:18px">
+            <svg class="i" style="color:var(--info)"><use href="#i-chart"/></svg>
+            <div><div class="t">Ăn uống tăng 18% so với TB 3 tháng</div><div class="d">Chủ yếu từ các bữa ăn ngoài cuối tuần</div></div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ── Row 4: Budget · Recent transactions · Alerts ── -->
+      <section class="row row-bottom">
+        <article class="card">
+          <div class="card-head">
+            <div><div class="card-title">Ngân sách tháng</div><div class="card-sub num">Còn 3.600.000 ₫ cho 7 ngày</div></div>
+            <a class="link" href="#">Chi tiết <svg class="i" style="width:14px;height:14px"><use href="#i-arrow-right"/></svg></a>
+          </div>
+          <div class="budget-list num">
+            <div>
+              <div class="budget-top"><span class="nm"><svg class="i" style="width:16px;height:16px;color:#EC4899"><use href="#i-bag"/></svg>Mua sắm</span><span class="val"><b style="color:var(--expense)">1,4tr</b> / 1,0tr</span></div>
+              <div class="bar"><span style="width:100%;background:var(--expense)"></span></div>
+              <div class="hint" style="color:var(--expense)">Vượt 400.000 ₫ (140%)</div>
+            </div>
+            <div>
+              <div class="budget-top"><span class="nm"><svg class="i" style="width:16px;height:16px;color:#F59E0B"><use href="#i-food"/></svg>Ăn uống</span><span class="val"><b>3,2tr</b> / 3,5tr</span></div>
+              <div class="bar"><span style="width:91%;background:var(--warn)"></span></div>
+              <div class="hint" style="color:var(--warn)">91% · sắp chạm giới hạn</div>
+            </div>
+            <div>
+              <div class="budget-top"><span class="nm"><svg class="i" style="width:16px;height:16px;color:#6366F1"><use href="#i-home"/></svg>Nhà ở</span><span class="val"><b>4,0tr</b> / 4,0tr</span></div>
+              <div class="bar"><span style="width:100%;background:var(--brand)"></span></div>
+              <div class="hint">100% · khoản cố định đã chi</div>
+            </div>
+            <div>
+              <div class="budget-top"><span class="nm"><svg class="i" style="width:16px;height:16px;color:#06B6D4"><use href="#i-car"/></svg>Di chuyển</span><span class="val"><b>1,5tr</b> / 2,0tr</span></div>
+              <div class="bar"><span style="width:75%;background:var(--income)"></span></div>
+            </div>
+            <div>
+              <div class="budget-top"><span class="nm"><svg class="i" style="width:16px;height:16px;color:#64748B"><use href="#i-film"/></svg>Giải trí</span><span class="val"><b>0,6tr</b> / 1,5tr</span></div>
+              <div class="bar"><span style="width:40%;background:var(--income)"></span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div><div class="card-title">Giao dịch gần đây</div><div class="card-sub">5 giao dịch mới nhất</div></div>
+            <a class="link" href="#">Xem tất cả <svg class="i" style="width:14px;height:14px"><use href="#i-arrow-right"/></svg></a>
+          </div>
+          <ul class="tx-list num">
+            <li class="tx-date">Hôm nay</li>
+            <li class="tx">
+              <span class="tx-ico" style="background:var(--income-soft);color:var(--income)"><svg class="i"><use href="#i-briefcase"/></svg></span>
+              <div class="tx-body"><div class="tx-name">Lương tháng 10</div><div class="tx-meta">Thu nhập · Vietcombank</div></div>
+              <span class="tx-amt" style="color:var(--income)">+25.000.000 ₫</span>
+            </li>
+            <li class="tx-date">Hôm qua</li>
+            <li class="tx">
+              <span class="tx-ico" style="background:#FFFBEB;color:#D97706"><svg class="i"><use href="#i-food"/></svg></span>
+              <div class="tx-body"><div class="tx-name">Bữa tối gia đình</div><div class="tx-meta">Ăn uống · Tiền mặt</div></div>
+              <span class="tx-amt">−450.000 ₫</span>
+            </li>
+            <li class="tx-date">Tuần này</li>
+            <li class="tx">
+              <span class="tx-ico" style="background:#ECFEFF;color:#0891B2"><svg class="i"><use href="#i-car"/></svg></span>
+              <div class="tx-body"><div class="tx-name">Đổ xăng</div><div class="tx-meta">Di chuyển · 22/10</div></div>
+              <span class="tx-amt">−200.000 ₫</span>
+            </li>
+            <li class="tx">
+              <span class="tx-ico" style="background:#FDF2F8;color:#DB2777"><svg class="i"><use href="#i-bag"/></svg></span>
+              <div class="tx-body"><div class="tx-name">Đồ gia dụng</div><div class="tx-meta">Mua sắm · 20/10</div></div>
+              <span class="tx-amt">−650.000 ₫</span>
+            </li>
+            <li class="tx">
+              <span class="tx-ico" style="background:var(--brand-soft);color:var(--brand)"><svg class="i"><use href="#i-home"/></svg></span>
+              <div class="tx-body"><div class="tx-name">Tiền thuê nhà</div><div class="tx-meta">Nhà ở · 18/10</div></div>
+              <span class="tx-amt">−4.000.000 ₫</span>
+            </li>
+          </ul>
+        </article>
+
+        <article class="card insights-card">
+          <div class="card-head">
+            <div><div class="card-title">Cần chú ý</div><div class="card-sub">Gợi ý dựa trên dữ liệu của bạn</div></div>
+            <span class="badge bad num">3</span>
+          </div>
+          <div class="insights">
+            <div class="insight bad">
+              <svg class="i" style="color:var(--expense)"><use href="#i-alert"/></svg>
+              <div><div class="t">Mua sắm vượt ngân sách</div><div class="d num">Đã chi 1.400.000 ₫ / 1.000.000 ₫ dự kiến</div><a class="link" href="#">Điều chỉnh ngân sách</a></div>
+            </div>
+            <div class="insight warn">
+              <svg class="i" style="color:var(--warn)"><use href="#i-clock"/></svg>
+              <div><div class="t">Sổ tiết kiệm sắp đáo hạn</div><div class="d num">VCB 100.000.000 ₫ · đáo hạn 15/11/2026 (22 ngày)</div><a class="link" href="#">Xem tài sản</a></div>
+            </div>
+            <div class="insight good">
+              <svg class="i" style="color:var(--income)"><use href="#i-check"/></svg>
+              <div><div class="t">Chi tiêu giảm 10,9%</div><div class="d num">Tiết kiệm thêm 1.400.000 ₫ so với tháng 9</div></div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <p class="mockup-note">Mockup — dữ liệu minh hoạ. Personal Finance · Dashboard redesign</p>
+    </div>
+  </main>
+</div>
+</body>
+</html>

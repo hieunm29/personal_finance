@@ -14,6 +14,10 @@ describe('gold ui helpers', () => {
     expect(calculateGoldValueFromPrice('chi', 5, 9_000_000_000)).toBe(4_500_000_000)
   })
 
+  test('calculates value preview for phan', () => {
+    expect(calculateGoldValueFromPrice('phan', 25, 9_000_000_000)).toBe(2_250_000_000)
+  })
+
   test('formats quantity label', () => {
     expect(formatGoldQuantityLabel('chi', 3.5)).toBe('3.5 chỉ')
     expect(formatGoldQuantityLabel('luong', 1)).toBe('1 lượng')

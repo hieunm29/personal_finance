@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { QUERY_KEYS } from '@pf/shared'
-import type { Asset, NetWorthData, NetWorthHistoryPoint, AssetType } from '@pf/shared'
+import type { Asset, AssetOverview, NetWorthData, NetWorthHistoryPoint, AssetType } from '@pf/shared'
 import type { CreateAssetInput, UpdateAssetInput } from '@pf/shared'
 import { apiClient } from '../services/apiClient'
 
@@ -31,11 +31,26 @@ export function useNetWorthHistory(limit?: number) {
   })
 }
 
+export function useAssetOverview() {
+  return useQuery({
+    queryKey: [...ASSETS_KEY, 'overview'],
+    queryFn: () => apiClient<{ data: AssetOverview }>('/assets/overview'),
+  })
+}
+
 export function useCreateAsset() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: CreateAssetInput) =>
       apiClient<{ data: Asset }>('/assets', { method: 'POST', body: data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ASSETS_KEY }),
+  })
+}
+
+export function useRevalueAssets() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiClient<{ data: AssetOverview }>('/assets/revalue', { method: 'POST' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ASSETS_KEY }),
   })
 }

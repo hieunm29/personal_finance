@@ -8,6 +8,7 @@ import {
   type CreateBudgetInput,
   type UpdateBudgetInput,
   type CopyPreviousBudgetInput,
+  type BudgetOverview,
 } from '@pf/shared'
 import { apiClient } from '../services/apiClient'
 
@@ -38,6 +39,22 @@ export function useBudgetHistory() {
   })
 }
 
+export function useBudgetOverview(month: string) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.budgets, 'overview', month],
+    queryFn: () => apiClient<{ data: BudgetOverview }>(`/budgets/overview?month=${month}`),
+    enabled: !!month,
+  })
+}
+
+export function useBudgetSuggestion(month: string, enabled = true) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.budgets, 'suggestion', month],
+    queryFn: () => apiClient<{ data: { month: string; totalLimit: number; categories: Array<{ categoryId: string; limitAmount: number }>; basedOnMonths: number } }>(`/budgets/suggestion?month=${month}`),
+    enabled: Boolean(month) && enabled,
+  })
+}
+
 export function useUpsertBudget() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -45,6 +62,9 @@ export function useUpsertBudget() {
       apiClient<{ data: unknown }>('/budgets', { method: 'POST', body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgets })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetProgress })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetHistory })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard })
     },
   })
 }
@@ -56,6 +76,8 @@ export function useUpdateBudget() {
       apiClient<{ data: unknown }>(`/budgets/${id}`, { method: 'PUT', body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgets })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetProgress })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetHistory })
     },
   })
 }
@@ -66,6 +88,8 @@ export function useDeleteBudget() {
     mutationFn: (id: string) => apiClient<null>(`/budgets/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgets })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetProgress })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetHistory })
     },
   })
 }
@@ -77,6 +101,8 @@ export function useCopyPreviousBudget() {
       apiClient<{ data: unknown }>('/budgets/copy-previous', { method: 'POST', body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgets })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetProgress })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.budgetHistory })
     },
   })
 }
