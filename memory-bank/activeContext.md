@@ -6,7 +6,12 @@
 
 ---
 
-## Các Thay đổi Gần đây (2026-03-04)
+## Các Thay đổi Gần đây (2026-11-19) — AI Assistant qua Zalo Bot
+- Dựng khung trợ lý AI (Claude + Zalo Bot Platform). Chi tiết: `doc/7.ai_assistant_architecture.md`.
+- Quyết định: Claude Messages API + Tool Runner tự host (không dùng Managed Agents); ghi giao dịch luôn + lệnh "hoàn tác"; liên kết tài khoản bằng mã `/link`.
+- Bước tiếp theo: chạy thử `bun run ai:chat` với API key thật; tạo bot Zalo + tunnel; thiết kế UI "Liên kết Zalo" ở trang Cài đặt (cần duyệt layout); xây bộ eval câu chat mẫu.
+
+## Các Thay đổi Trước (2026-03-04)
 
 ### Budget Planner hoàn thành (US-BUD-01→07)
 

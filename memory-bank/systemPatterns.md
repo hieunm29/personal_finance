@@ -342,6 +342,16 @@ export function getPreviousMonth(month: string): string {
 }
 ```
 
+## AI Assistant Patterns
+- 3 lớp: channel (`channels/zalo`) → agent (`ai/agent.ts runAgent(authUserId, text)`) → service có sẵn. Agent không biết Zalo.
+- Tool nhận `authUserId` qua `ToolContext` (closure), KHÔNG qua input schema → model không thể đọc dữ liệu user khác.
+- Tool làm việc bằng VND nguyên; đổi sang cents (×100) bên trong tool.
+- Lỗi nghiệp vụ trong tool → `throw new Error(msg)` → runner trả `is_error` cho Claude tự sửa.
+- System = phần cố định (cache) + danh mục/ví theo user (cache); ngày hôm nay gắn vào tin nhắn user mới nhất để không phá cache.
+- Sắp xếp `ai_messages`/`ai_actions` theo `rowid` (created_at chỉ chính xác tới giây).
+- Guard chống bịa (`ai/guard.ts`): tool được bọc ghi `callLog`; câu "Đã ghi/Đã hoàn tác" hoặc có số tiền mà không có tool thật → retry 1 lần với `[Hệ thống kiểm tra]`, vẫn sai → chặn cứng. Lịch sử lưu kèm `[Hệ thống ghi nhận: …]`. Lý do: minimax-m3 từng báo "Đã ghi lương 28tr" mà không gọi tool (2026-11-20).
+- Webhook nằm ngoài `/api` (không qua session middleware), trả 200 ngay, xử lý nền theo hàng đợi từng user, dedupe `message_id`.
+
 ## Format Utilities
 ```typescript
 // apps/web/src/utils/format.ts — Cached Intl formatters

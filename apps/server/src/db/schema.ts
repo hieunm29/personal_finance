@@ -182,6 +182,54 @@ export const assetHistory = sqliteTable('asset_history', {
 })
 
 // ═══════════════════════════════════════════════════════════
+// AI assistant + Zalo Bot channel
+// ═══════════════════════════════════════════════════════════
+
+/** Liên kết 1 tài khoản Zalo với 1 hồ sơ người dùng trong app. */
+export const zaloLinks = sqliteTable('zalo_links', {
+  id: id(),
+  userId: text('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+  zaloUserId: text('zalo_user_id').notNull().unique(),
+  displayName: text('display_name'),
+  createdAt: createdAt(),
+})
+
+/** Mã liên kết dùng 1 lần, người dùng gửi `/link CODE` cho bot. */
+export const zaloLinkCodes = sqliteTable('zalo_link_codes', {
+  code: text('code').primaryKey(),
+  userId: text('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+  expiresAt: text('expires_at').notNull(), // ISO datetime
+  createdAt: createdAt(),
+})
+
+/** Lịch sử hội thoại — Claude không tự nhớ, ta gửi lại N lượt gần nhất mỗi lần gọi. */
+export const aiMessages = sqliteTable('ai_messages', {
+  id: id(),
+  userId: text('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user' | 'assistant'
+  content: text('content').notNull(),
+  channel: text('channel').notNull().default('zalo'),
+  createdAt: createdAt(),
+})
+
+/** Nhật ký hành động AI đã ghi vào DB — phục vụ lệnh "hoàn tác". */
+export const aiActions = sqliteTable('ai_actions', {
+  id: id(),
+  userId: text('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(), // 'create_transaction'
+  refId: text('ref_id').notNull(), // transaction id
+  summary: text('summary'),
+  undoneAt: text('undone_at'),
+  createdAt: createdAt(),
+})
+
+/** Chống xử lý trùng khi Zalo gửi lại cùng một webhook. */
+export const zaloProcessedMessages = sqliteTable('zalo_processed_messages', {
+  messageId: text('message_id').primaryKey(),
+  createdAt: createdAt(),
+})
+
+// ═══════════════════════════════════════════════════════════
 // Relations
 // ═══════════════════════════════════════════════════════════
 export const userProfilesRelations = relations(userProfiles, ({ many }) => ({

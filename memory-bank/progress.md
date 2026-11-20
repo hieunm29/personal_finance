@@ -183,6 +183,15 @@
 
 ---
 
+### AI Assistant qua Zalo Bot — khung kiến trúc (2026-11-19) ✅
+- [x] Tài liệu: `doc/7.ai_assistant_architecture.md`
+- [x] Migration `0003_ai_zalo_assistant.sql`: zalo_links, zalo_link_codes, ai_messages, ai_actions, zalo_processed_messages
+- [x] `src/ai/`: agent (Tool Runner, `claude-opus-5-5`, effort low, fallbacks default), memory, system prompt, 6 tools
+- [x] `src/channels/zalo/`: webhook `/webhooks/zalo` (secret header, dedupe, queue theo user), linking `/link CODE`, zaloClient
+- [x] `/api/integrations/zalo/{link-code,status}` + DELETE
+- [x] Scripts `bun run ai:chat`, `bun run zalo:webhook`; test `src/ai/aiAssistant.test.ts` (không gọi Claude thật)
+- [ ] Chưa chạy thử với Claude/Zalo thật; chưa có UI liên kết Zalo trên web
+
 ## 🔲 Còn Lại — Phase 2
 
 ### Module 2: Transactions Phase 2

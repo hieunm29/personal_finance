@@ -9,9 +9,12 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "ai:chat": "bun run scripts/ai-chat.ts",
+    "zalo:webhook": "bun run scripts/zalo-set-webhook.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
     "@hono/zod-validator": "^0.4.3",
     "@pf/shared": "workspace:*",
     "better-auth": "^1.4.20",

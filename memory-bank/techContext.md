@@ -81,6 +81,12 @@ Request → logger() → cors() → /api/health (bypass)
 | `FRONTEND_URL=http://localhost:5173` | ✅ | CORS + trustedOrigins |
 | `VITE_API_URL=http://localhost:3000` | ✅ | Frontend API base |
 
+## AI Assistant (Zalo)
+- SDK `@anthropic-ai/sdk` 1.10 — dùng `betaTool` (JSON Schema) vì `betaZodTool` cần `zod/v4`, dự án đang zod 3.23
+- Provider: `AI_PROVIDER=openrouter|anthropic`. OpenRouter dùng Anthropic SDK với `baseURL=https://openrouter.ai/api`, `authToken=OPENROUTER_API_KEY`, `apiKey: null`; tắt effort/fallbacks và `thread: false` (Tool Runner mặc định gửi `thread` + beta header message-threads)
+- Env: `AI_PROVIDER`, `OPENROUTER_API_KEY`, `AI_BASE_URL`, `ANTHROPIC_API_KEY`, `AI_MODEL`, `AI_EFFORT`, `AI_HISTORY_LIMIT`, `AI_ENABLED`, `ZALO_BOT_TOKEN`, `ZALO_API_BASE`, `ZALO_WEBHOOK_SECRET`, `PUBLIC_BASE_URL`
+- Zalo Bot API: `https://bot-api.zaloplatforms.com/bot<TOKEN>/<method>`, sendMessage tối đa 2000 ký tự
+
 ## Design System (TailwindCSS 4)
 ```css
 /* apps/web/src/index.css */
