@@ -75,6 +75,18 @@ export const createTransactionSchema = transactionInputSchema.refine((value) => 
 
 export const updateTransactionSchema = transactionInputSchema.omit({ type: true }).partial()
 
+/** Chuyển tiền giữa 2 tài khoản (tiền mặt / ngân hàng) của chính người dùng. */
+export const createTransferSchema = z.object({
+  fromAccountId: walletIdSchema,
+  toAccountId: walletIdSchema,
+  amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
+  date: dateSchema,
+  note: z.string().max(500).optional(),
+}).refine((value) => value.fromAccountId !== value.toAccountId, {
+  message: 'Tài khoản nguồn và đích phải khác nhau',
+  path: ['toAccountId'],
+})
+
 export const transactionFilterSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']).optional(),
   categoryId: z.string().uuid().optional(),
@@ -263,6 +275,7 @@ export type SignInInput = z.infer<typeof signInSchema>
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>
+export type CreateTransferInput = z.infer<typeof createTransferSchema>
 export type TransactionFilter = z.infer<typeof transactionFilterSchema>
 export type TransactionAnalyticsFilter = z.infer<typeof transactionAnalyticsFilterSchema>
 export type CreateRecurringInput = z.infer<typeof createRecurringSchema>

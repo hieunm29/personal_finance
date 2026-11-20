@@ -136,6 +136,53 @@ async function runChild() {
   assert.equal((sqlite.query("SELECT COUNT(*) AS n FROM transactions WHERE type = 'expense'").get() as any).n, 0)
   assert.equal(scripted.length, 0)
 
+  // ─── chuyển khoản: service ───
+  const bankA = '60000000-0000-4000-8000-00000000000a'
+  const cashA = '60000000-0000-4000-8000-0000000000a2'
+  run(`INSERT INTO assets (id,user_id,type,name,current_value) VALUES (?,?,'bank','VPB',1000000000),(?,?,'cash','Tiền mặt',0)`, bankA, profileA, cashA, profileA)
+  const balance = (id: string) => (sqlite.query('SELECT current_value AS v FROM assets WHERE id = ?').get(id) as any).v
+  const { createTransfer, deleteTransaction, updateTransaction } = await import('../services/transactionService')
+  const { getMonthlyOverview } = await import('../services/reportService')
+  const { getCategories } = await import('../services/categoryService')
+  const overviewBefore = JSON.stringify(getMonthlyOverview(authA, 2026, 11))
+
+  const transfer = createTransfer(authA, { fromAccountId: `asset-${bankA}`, toAccountId: `asset-${cashA}`, amount: 200_000_000, date: '2026-11-20', note: 'Rút ATM' })
+  assert.equal(transfer.type, 'transfer')
+  assert.equal(transfer.toAsset?.name, 'Tiền mặt')
+  assert.equal(balance(bankA), 800_000_000)
+  assert.equal(balance(cashA), 200_000_000)
+  assert.equal(JSON.stringify(getMonthlyOverview(authA, 2026, 11)), overviewBefore, 'transfers must not change income/expense totals')
+  assert(!getCategories(authA).some((category: any) => category.type === 'transfer'), 'system transfer category must stay hidden')
+
+  assert.throws(() => createTransfer(authA, { fromAccountId: `asset-${bankA}`, toAccountId: `asset-${bankA}`, amount: 100, date: '2026-11-20' }), /khác nhau/)
+  assert.throws(() => createTransfer(authA, { fromAccountId: `asset-${cashA}`, toAccountId: `asset-${bankA}`, amount: 999_999_999_999, date: '2026-11-20' }), /không đủ/)
+  assert.throws(() => createTransfer(authB, { fromAccountId: `asset-${bankA}`, toAccountId: `asset-${cashA}`, amount: 100, date: '2026-11-20' }), /không tồn tại/)
+  assert.throws(() => updateTransaction(authA, transfer.id, { amount: 1 }), /Không sửa được/)
+
+  deleteTransaction(authA, transfer.id)
+  assert.equal(balance(bankA), 1_000_000_000, 'deleting a transfer must restore the source')
+  assert.equal(balance(cashA), 0, 'deleting a transfer must restore the target')
+
+  // ─── chuyển khoản: tool bot + hoàn tác ───
+  const viaBot = JSON.parse(await tool(authA, 'create_transfer').run({ fromAccountId: `asset-${bankA}`, toAccountId: `asset-${cashA}`, amountVnd: 2_000_000 }))
+  assert.equal(viaBot.ok, true)
+  assert.equal(viaBot.toBalanceVnd, 2_000_000)
+  await assert.rejects(() => tool(authA, 'create_transfer').run({ fromAccountId: walletA, toAccountId: `asset-${cashA}`, amountVnd: 1 }), /không phải tài khoản/)
+  const undoTransfer = JSON.parse(await tool(authA, 'undo_last_action').run({}))
+  assert.match(undoTransfer.undone, /VPB → Tiền mặt/)
+  assert.equal(balance(bankA), 1_000_000_000)
+  assert.equal(balance(cashA), 0)
+
+  // Model nói "Đã rút" mà không gọi tool → guard bắt làm lại; lần 2 gọi create_transfer thật.
+  scripted.push(
+    say('Đã rút 500.000đ từ VPB về Tiền mặt.'),
+    callTool('create_transfer', { fromAccountId: `asset-${bankA}`, toAccountId: `asset-${cashA}`, amountVnd: 500_000 }),
+    say('⇄ Đã rút 500.000đ: VPB → Tiền mặt.'),
+  )
+  assert.equal(await runAgent({ authUserId: authA, text: 'rút 500k', channel: 'cli' }), '⇄ Đã rút 500.000đ: VPB → Tiền mặt.')
+  assert.equal(balance(cashA), 50_000_000)
+  assert.match(JSON.stringify(requests.at(-1).system), /Tiền mặt \(id: asset-[^)]+\) — tiền mặt, số dư 0đ \[mặc định\]/)
+
   // ─── trí nhớ dài hạn: remember → có trong system prompt lần sau → /reset không xóa → forget ───
   const remembered = JSON.parse(await tool(authA, 'remember_fact').run({ content: 'Cà phê luôn ghi vào ví Momo' }))
   assert.equal(remembered.ok, true)

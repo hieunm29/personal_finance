@@ -1,8 +1,8 @@
 import { betaTool } from '@anthropic-ai/sdk/helpers/beta/json-schema'
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from '../../db'
 import { aiActions } from '../../db/schema'
-import { createTransaction, deleteTransaction, getTransactions } from '../../services/transactionService'
+import { createTransaction, createTransfer, deleteTransaction, getTransactions } from '../../services/transactionService'
 import { getDefaultAccountId, getProfileIdByAuthUser, getUserFinanceContext } from '../userContext'
 import { centsToVnd, json, todayVN, toolFail, vndToCents } from './helpers'
 import type { ToolContext } from './index'
@@ -80,12 +80,13 @@ export function buildTransactionTools(ctx: ToolContext) {
   const undoLastActionTool = betaTool({
     name: 'undo_last_action',
     description:
-      'Hoàn tác (xóa) giao dịch gần nhất mà trợ lý đã ghi qua chat. Dùng khi người dùng nói "hoàn tác", "xóa cái vừa rồi", "nhầm rồi".',
+      'Hoàn tác (xóa) giao dịch hoặc chuyển khoản gần nhất mà trợ lý đã ghi qua chat; số dư tài khoản được trả lại. ' +
+      'Dùng khi người dùng nói "hoàn tác", "xóa cái vừa rồi", "nhầm rồi".',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     run: async () => {
       const profileId = getProfileIdByAuthUser(ctx.authUserId)
       const last = db.select().from(aiActions)
-        .where(and(eq(aiActions.userId, profileId), eq(aiActions.kind, 'create_transaction'), isNull(aiActions.undoneAt)))
+        .where(and(eq(aiActions.userId, profileId), inArray(aiActions.kind, ['create_transaction', 'create_transfer']), isNull(aiActions.undoneAt)))
         .orderBy(desc(sql`rowid`)) // thứ tự chèn, chính xác hơn created_at (theo giây)
         .get()
       if (!last) toolFail('Không có giao dịch nào do trợ lý ghi để hoàn tác.')
@@ -97,6 +98,63 @@ export function buildTransactionTools(ctx: ToolContext) {
       }
       db.update(aiActions).set({ undoneAt: new Date().toISOString() }).where(eq(aiActions.id, last.id)).run()
       return json({ ok: true, undone: last.summary })
+    },
+  })
+
+  const createTransferTool = betaTool({
+    name: 'create_transfer',
+    description:
+      'Chuyển tiền giữa 2 tài khoản của CHÍNH người dùng: rút tiền ngân hàng về tiền mặt, nộp tiền mặt vào ngân hàng, ' +
+      'chuyển giữa 2 ngân hàng, nạp ví điện tử. Tài khoản nguồn bị trừ, đích được cộng; KHÔNG tính là thu hay chi. ' +
+      'Không dùng cho chuyển tiền cho người khác (đó là khoản chi → create_transaction). ' +
+      'Lấy fromAccountId/toAccountId từ danh sách tài khoản trong system prompt.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fromAccountId: { type: 'string', description: 'id tài khoản nguồn (dạng asset-...)' },
+        toAccountId: { type: 'string', description: 'id tài khoản đích (dạng asset-...)' },
+        amountVnd: { type: 'integer', minimum: 1, description: 'Số tiền bằng VND nguyên, ví dụ 2 củ → 2000000' },
+        date: { type: 'string', description: 'YYYY-MM-DD; bỏ trống = hôm nay' },
+        note: { type: 'string', description: 'Ghi chú ngắn, ví dụ "Rút ATM"' },
+      },
+      required: ['fromAccountId', 'toAccountId', 'amountVnd'],
+      additionalProperties: false,
+    },
+    run: async (input) => {
+      const accounts = getUserFinanceContext(ctx.authUserId).accounts
+      const from = accounts.find((account) => account.id === input.fromAccountId)
+      const to = accounts.find((account) => account.id === input.toAccountId)
+      if (!from || from.kind === 'wallet') toolFail(`fromAccountId "${input.fromAccountId}" không phải tài khoản tiền mặt/ngân hàng trong danh sách.`)
+      if (!to || to.kind === 'wallet') toolFail(`toAccountId "${input.toAccountId}" không phải tài khoản tiền mặt/ngân hàng trong danh sách.`)
+      if (from.id === to.id) toolFail('Tài khoản nguồn và đích trùng nhau.')
+
+      // Lỗi nghiệp vụ (vd số dư không đủ) từ service được gửi lại cho model để báo người dùng.
+      const created = createTransfer(ctx.authUserId, {
+        fromAccountId: from.id,
+        toAccountId: to.id,
+        amount: vndToCents(input.amountVnd),
+        date: input.date || todayVN(),
+        note: input.note,
+      })
+
+      const summary = `Chuyển ${input.amountVnd.toLocaleString('vi-VN')}đ: ${from.name} → ${to.name}`
+      db.insert(aiActions).values({
+        userId: getProfileIdByAuthUser(ctx.authUserId),
+        kind: 'create_transfer',
+        refId: created.id,
+        summary,
+      }).run()
+
+      return json({
+        ok: true,
+        transactionId: created.id,
+        amountVnd: centsToVnd(created.amount),
+        from: from.name,
+        to: to.name,
+        fromBalanceVnd: centsToVnd(created.asset?.currentValue ?? 0),
+        toBalanceVnd: centsToVnd(created.toAsset?.currentValue ?? 0),
+        date: created.date,
+      })
     },
   })
 
@@ -141,5 +199,5 @@ export function buildTransactionTools(ctx: ToolContext) {
     },
   })
 
-  return [createTransactionTool, undoLastActionTool, searchTransactionsTool]
+  return [createTransactionTool, undoLastActionTool, searchTransactionsTool, createTransferTool]
 }

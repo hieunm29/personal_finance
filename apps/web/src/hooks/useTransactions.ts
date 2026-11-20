@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   QUERY_KEYS,
   type CreateTransactionInput,
+  type CreateTransferInput,
   type UpdateTransactionInput,
   type TransactionFilter,
   type TransactionWithRelations,
@@ -102,6 +103,16 @@ export function useCreateTransaction() {
   return useMutation({
     mutationFn: (data: CreateTransactionInput) =>
       apiClient<{ data: unknown }>('/transactions', { method: 'POST', body: data }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Chuyển tiền giữa 2 tài khoản; số dư cả hai tài khoản thay đổi nên làm mới cả tài sản. */
+export function useCreateTransfer() {
+  const invalidate = useInvalidateTransactionData()
+  return useMutation({
+    mutationFn: (data: CreateTransferInput) =>
+      apiClient<{ data: unknown }>('/transactions/transfer', { method: 'POST', body: data }),
     onSuccess: invalidate,
   })
 }

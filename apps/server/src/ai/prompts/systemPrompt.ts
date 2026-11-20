@@ -1,4 +1,4 @@
-import type { UserFinanceContext } from '../userContext'
+import { getDefaultAccountId, type UserFinanceContext } from '../userContext'
 
 /**
  * PHẦN CỐ ĐỊNH của system prompt — giống hệt nhau cho mọi người dùng, mọi lần gọi.
@@ -21,7 +21,15 @@ Quy tắc ghi giao dịch:
 - Một tin nhắn có nhiều khoản (ví dụ "ăn sáng 30k, xăng 50k") thì ghi từng khoản.
 - CHỈ được viết "Đã ghi…" sau khi create_transaction trả về ok:true trong CHÍNH lượt này. Câu "Đã ghi" trong lịch sử không có nghĩa là giao dịch mới đã được ghi.
 - Sau khi ghi, xác nhận 1-2 dòng: loại, số tiền, danh mục, ví; kết thúc bằng "Gõ *hoàn tác* nếu sai."
-- Khi người dùng nói "hoàn tác", "xóa cái vừa rồi", "nhầm rồi" → gọi undo_last_action.
+- Khi người dùng nói "hoàn tác", "xóa cái vừa rồi", "nhầm rồi" → gọi undo_last_action (hoàn tác được cả giao dịch lẫn chuyển khoản).
+
+Chuyển tiền giữa các tài khoản của chính người dùng (KHÔNG phải thu/chi, KHÔNG dùng create_transaction):
+- "rút tiền", "rút ATM", "rút 2 củ" → create_transfer từ tài khoản ngân hàng → tài khoản tiền mặt.
+- "nộp tiền vào VPB", "gửi tiền mặt vào tài khoản" → từ tiền mặt → ngân hàng đó.
+- "chuyển 5tr từ VPB sang Techcombank", "nạp Momo 200k" → giữa 2 tài khoản được nêu.
+- Nếu có nhiều tài khoản ngân hàng mà người dùng không nói rõ, hoặc tài khoản được nhắc không có trong danh sách → hỏi lại, không đoán.
+- Chuyển tiền cho NGƯỜI KHÁC (trả tiền nhà, chuyển cho mẹ, trả nợ bạn) là khoản CHI → create_transaction.
+- CHỈ được viết "Đã chuyển / Đã rút / Đã nộp" sau khi create_transfer trả về ok:true trong CHÍNH lượt này. Xác nhận dạng: "⇄ Đã chuyển 2.000.000đ: VPB → Tiền mặt. Gõ *hoàn tác* nếu sai."
 
 Quy tắc trả lời thống kê:
 - Luôn gọi tool để lấy số liệu trong CHÍNH lượt này, kể cả khi lịch sử đã có câu trả lời tương tự — dữ liệu có thể đã thay đổi. Không tự bịa hay tự cộng con số từ lịch sử.
@@ -42,9 +50,11 @@ Phạm vi: chỉ hỗ trợ tài chính cá nhân của chính người dùng n�
 Bạn không phải chuyên gia tư vấn đầu tư được cấp phép; không khuyến nghị mua bán chứng khoán, vàng, tiền số cụ thể.`
 
 /**
- * PHẦN THEO NGƯỜI DÙNG — danh mục và ví. Thay đổi hiếm nên vẫn cache được theo từng user.
+ * PHẦN THEO NGƯỜI DÙNG — danh mục, tài khoản (kèm số dư). Số dư đổi sau mỗi giao dịch nên
+ * khối này hết cache khi có giao dịch mới; phần BASE_SYSTEM_PROMPT phía trên vẫn cache được.
  */
 export function buildUserContextPrompt(context: UserFinanceContext): string {
+  const defaultId = getDefaultAccountId(context)
   const expense = context.categories.filter((item) => item.type === 'expense')
   const income = context.categories.filter((item) => item.type === 'income')
   const line = (item: { id: string; name: string }) => `- ${item.name} (id: ${item.id})`
@@ -56,8 +66,12 @@ export function buildUserContextPrompt(context: UserFinanceContext): string {
     'Danh mục THU (income):',
     ...income.map(line),
     '',
-    'Ví / tài khoản:',
-    ...context.accounts.map((account) => `${line(account)}${account.isDefault ? ' [mặc định]' : ''}`),
+    'Tài khoản (số dư hiện tại):',
+    ...context.accounts.map((account) => {
+      const kind = account.kind === 'cash' ? 'tiền mặt' : account.kind === 'bank' ? 'ngân hàng' : 'ví, không theo dõi số dư'
+      const balance = account.balanceVnd !== undefined ? `, số dư ${account.balanceVnd.toLocaleString('vi-VN')}đ` : ''
+      return `${line(account)} — ${kind}${balance}${account.id === defaultId ? ' [mặc định]' : ''}`
+    }),
   ].join('\n')
 }
 

@@ -1,8 +1,10 @@
 import { and, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
 import { db } from '../db'
-import { assetHistory, assets, categories, recurringTemplates, transactions, userProfiles, wallets } from '../db/schema'
+import { assetHistory, assets, categories, categoryGroups, recurringTemplates, transactions, userProfiles, wallets } from '../db/schema'
 import type {
   CreateTransactionInput,
+  CreateTransferInput,
   TransactionAnalytics,
   TransactionAnalyticsFilter,
   TransactionFilter,
@@ -10,6 +12,12 @@ import type {
 } from '@pf/shared'
 
 type TransactionQueryFilter = Omit<TransactionAnalyticsFilter, 'page' | 'limit'>
+
+/** Tài sản dùng được làm "tài khoản" của giao dịch: có số dư, tự cộng/trừ theo giao dịch. */
+const ACCOUNT_ASSET_TYPES = ['bank', 'cash']
+
+/** Tài khoản đích của chuyển khoản — cùng bảng assets nên cần alias để join lần 2. */
+const toAssets = alias(assets, 'to_assets')
 
 function getProfileId(authUserId: string): string {
   const profile = db.select({ id: userProfiles.id }).from(userProfiles)
@@ -22,7 +30,7 @@ const transactionSelect = {
   id: transactions.id, userId: transactions.userId, type: transactions.type, amount: transactions.amount,
   categoryId: transactions.categoryId, walletId: transactions.walletId, assetId: transactions.assetId,
   recurringTemplateId: transactions.recurringTemplateId,
-  toWalletId: transactions.toWalletId, date: transactions.date, note: transactions.note,
+  toWalletId: transactions.toWalletId, toAssetId: transactions.toAssetId, date: transactions.date, note: transactions.note,
   isRecurring: transactions.isRecurring, createdAt: transactions.createdAt, updatedAt: transactions.updatedAt,
   category: {
     id: categories.id, userId: categories.userId, groupId: categories.groupId, name: categories.name,
@@ -35,6 +43,7 @@ const transactionSelect = {
     updatedAt: wallets.updatedAt,
   },
   asset: { id: assets.id, name: assets.name, type: assets.type, currentValue: assets.currentValue },
+  toAsset: { id: toAssets.id, name: toAssets.name, type: toAssets.type, currentValue: toAssets.currentValue },
   recurrenceInterval: recurringTemplates.interval,
 }
 
@@ -58,7 +67,11 @@ function buildConditions(profileId: string, filters: TransactionQueryFilter) {
   const refs = walletReferences(filters)
   const walletConditions = []
   if (refs.walletIds.length > 0) walletConditions.push(inArray(transactions.walletId, refs.walletIds))
-  if (refs.assetIds.length > 0) walletConditions.push(inArray(transactions.assetId, refs.assetIds))
+  if (refs.assetIds.length > 0) {
+    walletConditions.push(inArray(transactions.assetId, refs.assetIds))
+    // Chuyển khoản TỚI tài khoản này cũng thuộc lịch sử của tài khoản.
+    walletConditions.push(inArray(transactions.toAssetId, refs.assetIds))
+  }
   if (walletConditions.length > 0) conditions.push(walletConditions.length === 1 ? walletConditions[0] : or(...walletConditions)!)
   return conditions
 }
@@ -68,6 +81,7 @@ function buildTransactionQuery(profileId: string, filters: TransactionQueryFilte
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(wallets, eq(transactions.walletId, wallets.id))
     .leftJoin(assets, eq(transactions.assetId, assets.id))
+    .leftJoin(toAssets, eq(transactions.toAssetId, toAssets.id))
     .leftJoin(recurringTemplates, eq(transactions.recurringTemplateId, recurringTemplates.id))
     .where(and(...buildConditions(profileId, filters)))
     .orderBy(desc(transactions.date), desc(transactions.createdAt))
@@ -79,13 +93,14 @@ type SearchableTransaction = {
   category: { name: string | null } | null
   wallet: { name: string | null } | null
   asset: { name: string | null } | null
+  toAsset: { name: string | null } | null
 }
 
 function matchesSearch(row: SearchableTransaction, search?: string): boolean {
   const needle = search?.trim().toLocaleLowerCase()
   if (!needle) return true
   const amountValues = [String(row.amount), String(Math.round(row.amount / 100)), Math.round(row.amount / 100).toLocaleString('vi-VN')]
-  return [row.note, row.category?.name, row.wallet?.name, row.asset?.name, ...amountValues]
+  return [row.note, row.category?.name, row.wallet?.name, row.asset?.name, row.toAsset?.name, ...amountValues]
     .some((value) => value?.toLocaleLowerCase().includes(needle))
 }
 
@@ -100,7 +115,7 @@ function resolveAccount(profileId: string, reference: string) {
     const assetId = reference.slice(6)
     const asset = db.select().from(assets).where(eq(assets.id, assetId)).get()
     if (!asset || asset.userId !== profileId) throw Object.assign(new Error('Asset not found'), { status: 404 })
-    if (asset.type !== 'bank') throw Object.assign(new Error('Wallet must be a bank asset'), { status: 400 })
+    if (!ACCOUNT_ASSET_TYPES.includes(asset.type)) throw Object.assign(new Error('Tài khoản phải là tiền mặt hoặc ngân hàng'), { status: 400 })
     return { walletId: null, assetId }
   }
   const wallet = db.select({ id: wallets.id }).from(wallets)
@@ -126,6 +141,57 @@ function assertTargetWallet(profileId: string, targetId: string | undefined) {
     .where(and(eq(wallets.id, targetId), eq(wallets.userId, profileId))).get()
   if (!target) throw Object.assign(new Error('Target wallet not found'), { status: 404 })
   return target.id
+}
+
+/**
+ * Danh mục hệ thống "Chuyển khoản" (ẩn) — cột category_id bắt buộc, nên mỗi chuyển khoản
+ * gắn vào danh mục này. Tạo lần đầu khi cần.
+ */
+function ensureTransferCategory(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], profileId: string): string {
+  const existing = tx.select({ id: categories.id }).from(categories)
+    .where(and(eq(categories.userId, profileId), eq(categories.type, 'transfer'))).get()
+  if (existing) return existing.id
+  const group = tx.insert(categoryGroups).values({
+    userId: profileId, name: 'Chuyển khoản', type: 'transfer', color: '#f59e0b', sortOrder: 999, isDefault: true,
+  }).returning({ id: categoryGroups.id }).get()
+  return tx.insert(categories).values({
+    userId: profileId, groupId: group.id, name: 'Chuyển khoản', type: 'transfer', icon: null, color: '#f59e0b',
+    sortOrder: 0, isDefault: true, isVisible: false,
+  }).returning({ id: categories.id }).get().id
+}
+
+function resolveTransferAccount(profileId: string, reference: string, label: string) {
+  if (!reference.startsWith('asset-')) throw Object.assign(new Error(`${label} phải là tài khoản tiền mặt hoặc ngân hàng`), { status: 400 })
+  const asset = db.select().from(assets).where(eq(assets.id, reference.slice(6))).get()
+  if (!asset || asset.userId !== profileId) throw Object.assign(new Error(`${label} không tồn tại`), { status: 404 })
+  if (!ACCOUNT_ASSET_TYPES.includes(asset.type)) throw Object.assign(new Error(`${label} phải là tài khoản tiền mặt hoặc ngân hàng`), { status: 400 })
+  return asset
+}
+
+/**
+ * Chuyển tiền giữa 2 tài khoản của chính người dùng (rút ATM, nộp tiền, chuyển ngân hàng).
+ * Một dòng giao dịch type='transfer'; nguồn bị trừ, đích được cộng trong CÙNG một DB transaction.
+ * Không tính vào thu/chi — mọi báo cáo đều lọc theo type income/expense.
+ */
+export function createTransfer(authUserId: string, data: CreateTransferInput) {
+  const profileId = getProfileId(authUserId)
+  if (data.fromAccountId === data.toAccountId) throw Object.assign(new Error('Tài khoản nguồn và đích phải khác nhau'), { status: 400 })
+  const from = resolveTransferAccount(profileId, data.fromAccountId, 'Tài khoản nguồn')
+  const to = resolveTransferAccount(profileId, data.toAccountId, 'Tài khoản đích')
+  if (from.currentValue < data.amount) {
+    throw Object.assign(new Error(`Số dư ${from.name} không đủ (còn ${Math.round(from.currentValue / 100).toLocaleString('vi-VN')}đ)`), { status: 400 })
+  }
+  const id = crypto.randomUUID()
+  db.transaction((tx) => {
+    const categoryId = ensureTransferCategory(tx, profileId)
+    tx.insert(transactions).values({
+      id, userId: profileId, type: 'transfer', amount: data.amount, categoryId,
+      walletId: null, assetId: from.id, toAssetId: to.id, date: data.date, note: data.note ?? null, isRecurring: false,
+    }).run()
+    updateAssetValueInTransaction(tx, profileId, from.id, -data.amount)
+    updateAssetValueInTransaction(tx, profileId, to.id, data.amount)
+  })
+  return getTransactionById(authUserId, id)
 }
 
 function assetDelta(type: string, amount: number): number {
@@ -180,6 +246,7 @@ export function getTransactionById(authUserId: string, id: string) {
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(wallets, eq(transactions.walletId, wallets.id))
     .leftJoin(assets, eq(transactions.assetId, assets.id))
+    .leftJoin(toAssets, eq(transactions.toAssetId, toAssets.id))
     .leftJoin(recurringTemplates, eq(transactions.recurringTemplateId, recurringTemplates.id))
     .where(and(eq(transactions.id, id), eq(transactions.userId, profileId))).get()
   if (!row) throw Object.assign(new Error('Transaction not found'), { status: 404 })
@@ -263,7 +330,7 @@ export function exportTransactions(authUserId: string, filters: TransactionAnaly
   const rows = getFilteredRows(authUserId, filters)
   const lines = [
     ['date', 'type', 'category', 'amount', 'wallet', 'note'].map(csvCell).join(','),
-    ...rows.map((row) => [row.date, row.type, row.category?.name ?? 'Không phân loại', row.amount / 100, row.wallet?.name ?? row.asset?.name ?? '', row.note].map(csvCell).join(',')),
+    ...rows.map((row) => [row.date, row.type, row.category?.name ?? 'Không phân loại', row.amount / 100, row.toAsset ? `${row.asset?.name ?? ''} → ${row.toAsset.name}` : row.wallet?.name ?? row.asset?.name ?? '', row.note].map(csvCell).join(',')),
   ]
   return lines.join('\r\n') + '\r\n'
 }
@@ -272,6 +339,7 @@ export function updateTransaction(authUserId: string, id: string, data: UpdateTr
   const profileId = getProfileId(authUserId)
   const existing = db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, profileId))).get()
   if (!existing) throw Object.assign(new Error('Transaction not found'), { status: 404 })
+  if (existing.type === 'transfer') throw Object.assign(new Error('Không sửa được chuyển khoản. Hãy xóa và tạo lại.'), { status: 400 })
   if (data.categoryId !== undefined) assertCategory(profileId, data.categoryId, existing.type as CreateTransactionInput['type'])
   const nextAccount = data.walletId !== undefined ? resolveAccount(profileId, data.walletId) : { walletId: existing.walletId, assetId: existing.assetId }
   const nextTarget = data.toWalletId !== undefined ? assertTargetWallet(profileId, data.toWalletId) : existing.toWalletId
@@ -316,7 +384,13 @@ export function deleteTransaction(authUserId: string, id: string) {
   const existing = db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, profileId))).get()
   if (!existing) throw Object.assign(new Error('Transaction not found'), { status: 404 })
   db.transaction((tx) => {
-    if (existing.assetId && existing.type !== 'transfer') updateAssetValueInTransaction(tx, profileId, existing.assetId, -assetDelta(existing.type, existing.amount))
+    if (existing.type === 'transfer') {
+      // Hoàn lại cả hai phía: nguồn được cộng lại, đích bị trừ lại.
+      if (existing.assetId) updateAssetValueInTransaction(tx, profileId, existing.assetId, existing.amount)
+      if (existing.toAssetId) updateAssetValueInTransaction(tx, profileId, existing.toAssetId, -existing.amount)
+    } else if (existing.assetId) {
+      updateAssetValueInTransaction(tx, profileId, existing.assetId, -assetDelta(existing.type, existing.amount))
+    }
     if (existing.recurringTemplateId) {
       tx.update(recurringTemplates).set({ isActive: false }).where(eq(recurringTemplates.id, existing.recurringTemplateId)).run()
     }

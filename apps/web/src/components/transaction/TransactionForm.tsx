@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useForm, useController, type Control, type UseFormRegister } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import {
   createTransactionSchema,
   updateTransactionSchema,
@@ -11,13 +12,13 @@ import {
 import { useCategories } from '../../hooks/useCategories'
 import { useWallets } from '../../hooks/useWallets'
 import { useAssets } from '../../hooks/useAssets'
-import { useCreateTransaction, useUpdateTransaction } from '../../hooks/useTransactions'
+import { useCreateTransaction, useCreateTransfer, useUpdateTransaction } from '../../hooks/useTransactions'
 import { formatCurrency } from '../../utils/format'
 import TransactionCategoryIcon from './TransactionCategoryIcon'
 import './transaction-form.css'
 
 type TransactionFormAppearance = 'default' | 'modal' | 'redesigned'
-type FormType = 'income' | 'expense'
+type FormType = 'income' | 'expense' | 'transfer'
 type RecurrenceInterval = 'weekly' | 'monthly' | 'yearly'
 type ExtendedDefaults = Partial<CreateTransactionInput> & { recurrenceInterval?: RecurrenceInterval }
 
@@ -35,9 +36,23 @@ interface TransactionFormProps {
 interface WalletOption {
   id: string
   name: string
-  type: 'wallet' | 'bank'
+  type: 'wallet' | 'bank' | 'cash'
   balance?: number
 }
+
+/**
+ * Chuyển khoản không có danh mục nhưng cần tài khoản đích. Dùng cùng tên trường với form
+ * thu/chi (walletId = nguồn, toWalletId = đích) để lỗi hiện đúng chỗ.
+ */
+const transferFormSchema = z.object({
+  type: z.literal('transfer'),
+  amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
+  walletId: z.string().min(1, 'Chọn tài khoản nguồn'),
+  toWalletId: z.string({ required_error: 'Chọn tài khoản đích' }).min(1, 'Chọn tài khoản đích'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày: YYYY-MM-DD'),
+  note: z.string().max(500).optional(),
+}).refine((value) => value.walletId !== value.toWalletId, { message: 'Tài khoản nguồn và đích phải khác nhau', path: ['toWalletId'] })
+const transferResolver = zodResolver(transferFormSchema)
 
 function todayString(): string {
   return new Date().toLocaleDateString('sv')
@@ -96,7 +111,7 @@ function AmountInput({
         Số tiền <span className={modal ? 'txf-optional' : 'text-gray-400'}>(₫)</span>
       </label>
       <div className={modal ? 'txf-amount' : undefined}>
-        {modal && <span className={`txf-amount-sign ${selectedType === 'income' ? 'is-income' : ''}`} aria-hidden="true">{selectedType === 'income' ? '+' : '−'}</span>}
+        {modal && <span className={`txf-amount-sign ${selectedType === 'income' ? 'is-income' : selectedType === 'transfer' ? 'is-transfer' : ''}`} aria-hidden="true">{selectedType === 'income' ? '+' : selectedType === 'transfer' ? '⇄' : '−'}</span>}
         <input
           id="transaction-amount"
           type="text"
@@ -125,12 +140,20 @@ function AmountInput({
   )
 }
 
+const TYPE_LABEL: Record<FormType, { label: string; icon: string }> = {
+  expense: { label: 'Chi tiêu', icon: '↗' },
+  income: { label: 'Thu nhập', icon: '↘' },
+  transfer: { label: 'Chuyển khoản', icon: '⇄' },
+}
+
 function TypeToggle({ mode, selectedType, setType, modal }: { mode: 'create' | 'edit'; selectedType: FormType; setType: (type: FormType) => void; modal: boolean }) {
+  // Chuyển khoản chỉ tạo mới được (sửa chuyển khoản = xóa và tạo lại).
+  const types: FormType[] = mode === 'create' ? ['expense', 'income', 'transfer'] : ['expense', 'income']
   return (
     <div className={modal ? 'txf-field' : undefined}>
       <span className={modal ? 'txf-label' : 'block text-sm font-medium text-gray-700 mb-1'}>Loại giao dịch</span>
-      <div className={modal ? 'txf-type-switch' : 'flex rounded-md border border-gray-300 overflow-hidden'} role="radiogroup" aria-label="Loại giao dịch">
-        {(['expense', 'income'] as const).map((type, index, types) => (
+      <div className={modal ? `txf-type-switch ${types.length === 3 ? 'has-three' : ''}` : 'flex rounded-md border border-gray-300 overflow-hidden'} role="radiogroup" aria-label="Loại giao dịch">
+        {types.map((type, index) => (
           <button
             key={type}
             type="button"
@@ -146,11 +169,11 @@ function TypeToggle({ mode, selectedType, setType, modal }: { mode: 'create' | '
               event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[nextIndex]?.focus()
             }}
             className={modal
-              ? `txf-type-option ${selectedType === type ? `is-selected ${type === 'income' ? 'is-income' : 'is-expense'}` : ''}`
-              : `flex-1 py-2 text-sm font-medium transition-colors ${selectedType === type ? type === 'expense' ? 'bg-red-500 text-white' : 'bg-green-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'} disabled:cursor-not-allowed disabled:opacity-60`}
+              ? `txf-type-option ${selectedType === type ? `is-selected is-${type}` : ''}`
+              : `flex-1 py-2 text-sm font-medium transition-colors ${selectedType === type ? type === 'expense' ? 'bg-red-500 text-white' : type === 'income' ? 'bg-green-500 text-white' : 'bg-amber-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'} disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            {modal && <span aria-hidden="true">{type === 'income' ? '↘' : '↗'}</span>}
-            {type === 'income' ? 'Thu nhập' : 'Chi tiêu'}
+            {modal && <span aria-hidden="true">{TYPE_LABEL[type].icon}</span>}
+            {TYPE_LABEL[type].label}
           </button>
         ))}
       </div>
@@ -217,13 +240,13 @@ function CategoryField({ categories, loading, selectedCategoryId, setCategory, e
   )
 }
 
-function WalletField({ register, options, loading, error, modal }: { register: UseFormRegister<CreateTransactionInput>; options: Array<{ label: string; options: WalletOption[] }>; loading: boolean; error?: string; modal: boolean }) {
+function WalletField({ register, options, loading, error, modal, name = 'walletId', label = 'Ví / Tài khoản', placeholder = 'Chọn ví' }: { register: UseFormRegister<CreateTransactionInput>; options: Array<{ label: string; options: WalletOption[] }>; loading: boolean; error?: string; modal: boolean; name?: 'walletId' | 'toWalletId'; label?: string; placeholder?: string }) {
   return (
     <div className={modal ? 'txf-field' : undefined}>
-      <label htmlFor="walletId" className={modal ? 'txf-label' : 'block text-sm font-medium text-gray-700 mb-1'}>Ví / Tài khoản</label>
+      <label htmlFor={name} className={modal ? 'txf-label' : 'block text-sm font-medium text-gray-700 mb-1'}>{label}</label>
       {loading ? <div className={modal ? 'txf-select-loading' : 'h-9 rounded-md bg-gray-100 animate-pulse'} /> : (
-        <select id="walletId" {...register('walletId')} className={modal ? 'txf-select' : 'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'}>
-          <option value="">Chọn ví</option>
+        <select id={name} {...register(name)} className={modal ? 'txf-select' : 'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'}>
+          <option value="">{placeholder}</option>
           {options.map((group) => <optgroup key={group.label} label={group.label}>{group.options.map((option) => <option key={option.id} value={option.id}>{option.name}{option.balance !== undefined ? ` (${formatCurrency(option.balance, 'VND')})` : ''}</option>)}</optgroup>)}
         </select>
       )}
@@ -270,9 +293,14 @@ function RecurringField({ enabled, interval, setEnabled, setInterval, modal }: {
 export default function TransactionForm({ mode, transactionId, defaultValues, onSuccess, onCancel, appearance = 'default', variant = 'default', onSaveAndContinue }: TransactionFormProps) {
   const modal = appearance === 'modal' || appearance === 'redesigned' || variant === 'redesigned'
   const initialValues = useMemo(() => initialFormValues(defaultValues, mode), [defaultValues, mode])
-  const resolver = mode === 'create' ? zodResolver(createTransactionSchema) : zodResolver(updateTransactionSchema)
+  const baseResolver = mode === 'create' ? zodResolver(createTransactionSchema) : zodResolver(updateTransactionSchema)
+  const resolver: typeof baseResolver = (values, context, options) => values.type === 'transfer'
+    ? (transferResolver as unknown as typeof baseResolver)(values, context, options)
+    : baseResolver(values, context, options)
   const { register, handleSubmit, watch, setValue, reset, control, formState: { errors, isSubmitting } } = useForm<CreateTransactionInput>({ resolver, defaultValues: initialValues })
-  const selectedType = (watch('type') === 'income' ? 'income' : 'expense') as FormType
+  const watchedType = watch('type')
+  const selectedType: FormType = watchedType === 'income' || watchedType === 'transfer' ? watchedType : 'expense'
+  const isTransfer = selectedType === 'transfer'
   const selectedCategoryId = watch('categoryId')
   const selectedDate = watch('date')
   const isRecurring = watch('isRecurring')
@@ -285,23 +313,36 @@ export default function TransactionForm({ mode, transactionId, defaultValues, on
       prevTypeRef.current = selectedType
     }
   }, [selectedType, mode, setValue])
-  const { data: categoriesData, isLoading: catsLoading } = useCategories(selectedType)
+  const { data: categoriesData, isLoading: catsLoading } = useCategories(isTransfer ? 'expense' : selectedType)
   const { data: walletsData, isLoading: walletsLoading } = useWallets()
-  const { data: bankAssetsData, isLoading: bankAssetsLoading } = useAssets('bank')
+  const { data: assetsData, isLoading: assetsLoading } = useAssets()
   const categories = categoriesData?.data ?? []
-  const walletOptions = useMemo(() => {
+  // Tài khoản có số dư = tài sản tiền mặt / ngân hàng (id dạng 'asset-<uuid>').
+  const accountGroups = useMemo(() => {
     const groups: Array<{ label: string; options: WalletOption[] }> = []
-    const wallets = walletsData?.data?.map((wallet) => ({ id: wallet.id, name: wallet.name, type: 'wallet' as const })) ?? []
-    const bankAssets = bankAssetsData?.data?.map((asset: Asset) => ({ id: `asset-${asset.id}`, name: asset.name, type: 'bank' as const, balance: asset.currentValue })) ?? []
-    if (wallets.length) groups.push({ label: 'Ví (Tiền mặt)', options: wallets })
-    if (bankAssets.length) groups.push({ label: 'Tài khoản ngân hàng', options: bankAssets })
+    const toOption = (asset: Asset, type: 'cash' | 'bank') => ({ id: `asset-${asset.id}`, name: asset.name, type, balance: asset.currentValue })
+    const cash = assetsData?.data?.filter((asset: Asset) => asset.type === 'cash').map((asset: Asset) => toOption(asset, 'cash')) ?? []
+    const bank = assetsData?.data?.filter((asset: Asset) => asset.type === 'bank').map((asset: Asset) => toOption(asset, 'bank')) ?? []
+    if (cash.length) groups.push({ label: 'Tiền mặt', options: cash })
+    if (bank.length) groups.push({ label: 'Tài khoản ngân hàng', options: bank })
     return groups
-  }, [walletsData?.data, bankAssetsData?.data])
-  const isLoading = walletsLoading || bankAssetsLoading
+  }, [assetsData?.data])
+  // Ví kiểu cũ (không có số dư) chỉ còn cho thu/chi, nếu người dùng vẫn còn.
+  const walletOptions = useMemo(() => {
+    const wallets = walletsData?.data?.map((wallet) => ({ id: wallet.id, name: wallet.name, type: 'wallet' as const })) ?? []
+    return wallets.length ? [{ label: 'Ví', options: wallets }, ...accountGroups] : accountGroups
+  }, [walletsData?.data, accountGroups])
+  const isLoading = walletsLoading || assetsLoading
   const createMutation = useCreateTransaction()
+  const createTransferMutation = useCreateTransfer()
   const updateMutation = useUpdateTransaction(transactionId ?? '')
-  const activeMutation = mode === 'edit' ? updateMutation : createMutation
-  const setType = (type: FormType) => setValue('type', type, { shouldDirty: true, shouldValidate: true })
+  const activeMutation = mode === 'edit' ? updateMutation : isTransfer ? createTransferMutation : createMutation
+  const setType = (type: FormType) => {
+    if (type === 'transfer') setValue('isRecurring', false)
+    // Ô "Đến tài khoản" chỉ có ở chuyển khoản; bỏ giá trị cũ để không chặn validate thu/chi.
+    else setValue('toWalletId', undefined)
+    setValue('type', type, { shouldDirty: true, shouldValidate: true })
+  }
   const setCategory = (categoryId: string) => setValue('categoryId', categoryId, { shouldDirty: true, shouldValidate: true })
   const setDate = (date: string) => setValue('date', date, { shouldDirty: true, shouldValidate: true })
   const addQuickAmount = (amountCents: number) => setValue('amount', (watch('amount') || 0) + amountCents, { shouldDirty: true, shouldValidate: true })
@@ -315,9 +356,11 @@ export default function TransactionForm({ mode, transactionId, defaultValues, on
           ? { ...data, recurrenceInterval: mode === 'create' ? 'monthly' as const : undefined }
           : data
       if (mode === 'edit') await updateMutation.mutateAsync(payload)
-      else await createMutation.mutateAsync(payload)
+      else if (data.type === 'transfer') {
+        await createTransferMutation.mutateAsync({ fromAccountId: data.walletId, toAccountId: data.toWalletId ?? '', amount: data.amount, date: data.date, note: data.note || undefined })
+      } else await createMutation.mutateAsync(payload)
       if (continueAdding && mode === 'create') {
-        reset({ ...initialValues, amount: 0, categoryId: '', walletId: '', date: todayString(), note: '', isRecurring: false, recurrenceInterval: 'monthly' })
+        reset({ ...initialValues, type: data.type, amount: 0, categoryId: '', walletId: '', toWalletId: undefined, date: todayString(), note: '', isRecurring: false, recurrenceInterval: 'monthly' })
         onSaveAndContinue?.()
         return
       }
@@ -337,15 +380,20 @@ export default function TransactionForm({ mode, transactionId, defaultValues, on
   const formBody = <>
     <TypeToggle mode={mode} selectedType={selectedType} setType={setType} modal={modal} />
     <AmountInput control={control} error={errors.amount?.message} modal={modal} selectedType={selectedType} onQuickAdd={modal ? addQuickAmount : undefined} />
-    <CategoryField categories={categories} loading={catsLoading} selectedCategoryId={selectedCategoryId} setCategory={setCategory} error={errors.categoryId?.message} modal={modal} />
-    {modal ? <div className="txf-two-column"><WalletField register={register} options={walletOptions} loading={isLoading} error={errors.walletId?.message} modal /><DateField register={register} selectedDate={selectedDate} setDate={setDate} error={errors.date?.message} modal /></div> : <><WalletField register={register} options={walletOptions} loading={isLoading} error={errors.walletId?.message} modal={false} /><DateField register={register} selectedDate={selectedDate} setDate={setDate} error={errors.date?.message} modal={false} /></>}
+    {isTransfer ? <>
+      {modal ? <div className="txf-two-column"><WalletField register={register} options={accountGroups} loading={isLoading} error={errors.walletId?.message} modal label="Từ tài khoản" placeholder="Chọn tài khoản" /><WalletField register={register} name="toWalletId" options={accountGroups} loading={isLoading} error={errors.toWalletId?.message} modal label="Đến tài khoản" placeholder="Chọn tài khoản" /></div> : <><WalletField register={register} options={accountGroups} loading={isLoading} error={errors.walletId?.message} modal={false} label="Từ tài khoản" placeholder="Chọn tài khoản" /><WalletField register={register} name="toWalletId" options={accountGroups} loading={isLoading} error={errors.toWalletId?.message} modal={false} label="Đến tài khoản" placeholder="Chọn tài khoản" /></>}
+      <DateField register={register} selectedDate={selectedDate} setDate={setDate} error={errors.date?.message} modal={modal} />
+    </> : <>
+      <CategoryField categories={categories} loading={catsLoading} selectedCategoryId={selectedCategoryId} setCategory={setCategory} error={errors.categoryId?.message} modal={modal} />
+      {modal ? <div className="txf-two-column"><WalletField register={register} options={walletOptions} loading={isLoading} error={errors.walletId?.message} modal /><DateField register={register} selectedDate={selectedDate} setDate={setDate} error={errors.date?.message} modal /></div> : <><WalletField register={register} options={walletOptions} loading={isLoading} error={errors.walletId?.message} modal={false} /><DateField register={register} selectedDate={selectedDate} setDate={setDate} error={errors.date?.message} modal={false} /></>}
+    </>}
     <NoteField register={register} error={errors.note?.message} modal={modal} />
-    <RecurringField enabled={isRecurring} interval={recurrenceInterval} setEnabled={(value) => {
+    {!isTransfer && <RecurringField enabled={isRecurring} interval={recurrenceInterval} setEnabled={(value) => {
       setValue('isRecurring', value, { shouldDirty: true, shouldValidate: true })
       if (value && mode === 'create' && !watch('recurrenceInterval')) {
         setValue('recurrenceInterval', 'monthly', { shouldDirty: true, shouldValidate: true })
       }
-    }} setInterval={(value) => setValue('recurrenceInterval', value, { shouldDirty: true, shouldValidate: true })} modal={modal} />
+    }} setInterval={(value) => setValue('recurrenceInterval', value, { shouldDirty: true, shouldValidate: true })} modal={modal} />}
     {activeMutation.error && <p className={modal ? 'txf-server-error' : 'text-sm text-red-600'} role="alert">{activeMutation.error.message}</p>}
   </>
   if (!modal) return <form onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-4">{formBody}<div className="flex gap-3 pt-1"><button type="submit" disabled={isSubmitting || activeMutation.isPending} className="flex-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">{activeMutation.isPending ? 'Đang lưu...' : 'Lưu giao dịch'}</button>{onCancel && <button type="button" onClick={onCancel} className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Hủy</button>}</div></form>

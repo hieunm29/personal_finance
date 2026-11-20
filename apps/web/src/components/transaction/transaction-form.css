@@ -17,11 +17,14 @@
 .txf-type-option.is-selected { background: #fff; box-shadow: 0 1px 3px rgb(15 23 42 / 10%); }
 .txf-type-option.is-selected.is-expense { color: #dc2626; }
 .txf-type-option.is-selected.is-income { color: #059669; }
+.txf-type-switch.has-three { grid-template-columns: repeat(3, 1fr); }
+.txf-type-option.is-selected.is-transfer { color: #d97706; }
 .txf-type-option:disabled { cursor: not-allowed; opacity: .65; }
 .txf-amount { display: flex; align-items: baseline; gap: 8px; padding: 14px 16px; border: 1.5px solid #e5e7ef; border-radius: 14px; transition: border-color .2s, box-shadow .2s; }
 .txf-amount:focus-within { border-color: #4f46e5; box-shadow: 0 0 0 3px rgb(79 70 229 / 15%); }
 .txf-amount-sign { color: #dc2626; font-size: 28px; font-weight: 700; }
 .txf-amount-sign.is-income { color: #059669; }
+.txf-amount-sign.is-transfer { color: #d97706; }
 .txf-amount-input { width: 100%; min-width: 0; flex: 1; padding: 0; color: #0f172a; background: transparent; border: 0; outline: 0; font: inherit; font-size: 32px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .txf-currency { color: #64748b; font-size: 18px; font-weight: 600; }
 .txf-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

@@ -4,7 +4,7 @@ import {
   userProfiles,
   categoryGroups,
   categories,
-  wallets,
+  assets,
 } from '../db/schema'
 import { DEFAULT_CATEGORY_GROUPS } from '@pf/shared'
 
@@ -64,14 +64,14 @@ export async function seedUserData(
     }
   }
 
-  // Create default wallet
-  db.insert(wallets)
+  // Tài khoản tiền mặt mặc định — là tài sản loại 'cash' để có số dư thật,
+  // tự cộng/trừ theo giao dịch và tính vào tổng tài sản.
+  db.insert(assets)
     .values({
       userId: user.id,
-      name: 'Tiền mặt',
       type: 'cash',
-      initialBalance: 0,
-      isDefault: true,
+      name: 'Tiền mặt',
+      currentValue: 0,
     })
     .run()
 

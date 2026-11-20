@@ -1,4 +1,4 @@
-import { eq, and, sql, max, inArray } from 'drizzle-orm'
+import { eq, and, sql, max, inArray, ne } from 'drizzle-orm'
 import { db } from '../db'
 import { categories, categoryGroups, userProfiles, transactions } from '../db/schema'
 import type {
@@ -24,7 +24,7 @@ function getProfileId(authUserId: string): string {
 export function getCategoryGroups(authUserId: string, type?: 'income' | 'expense') {
   const profileId = getProfileId(authUserId)
 
-  const conditions = [eq(categoryGroups.userId, profileId)]
+  const conditions = [eq(categoryGroups.userId, profileId), ne(categoryGroups.type, 'transfer')]
   if (type) conditions.push(eq(categoryGroups.type, type))
 
   return db
@@ -123,7 +123,8 @@ export function getCategories(
 ) {
   const profileId = getProfileId(authUserId)
 
-  const conditions = [eq(categories.userId, profileId)]
+  // Danh mục hệ thống "Chuyển khoản" không bao giờ hiện trong danh sách.
+  const conditions = [eq(categories.userId, profileId), ne(categories.type, 'transfer')]
   if (type) conditions.push(eq(categories.type, type))
   if (!showHidden) conditions.push(eq(categories.isVisible, true))
 

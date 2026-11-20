@@ -18,12 +18,14 @@ const SAVE_CLAIM = claim('lưu')
 const MEMORY_CLAIM = /(đã|vừa)\s+(ghi\s*nhớ|nhớ)|mình\s+sẽ\s+nhớ/i
 const FORGET_CLAIM = /(đã|vừa)\s+(quên|bỏ\s+ghi\s*nhớ|xóa\s+ghi\s*nhớ|xoá\s+ghi\s*nhớ)/i
 const UNDO_CLAIM = claim('hoàn tác|huỷ|hủy')
+/** "Đã chuyển 2tr VPB → Tiền mặt", "Đã rút", "Đã nộp", "Đã nạp". */
+const TRANSFER_CLAIM = claim('chuyển|rút|nộp|nạp')
 /** "Đã xóa" có thể là hoàn tác giao dịch hoặc quên một ghi nhớ. */
 const DELETE_CLAIM = claim('xóa(?!\\s*ghi\\s*nhớ)|xoá(?!\\s*ghi\\s*nhớ)')
 const MONEY_AMOUNT = /\d[\d.,]*\s?(đ|₫|vnđ|vnd|k\b|nghìn|ngàn|triệu|tr\b)/i
 
 const READ_TOOLS = new Set(['search_transactions', 'get_monthly_summary', 'get_budget_status', 'get_net_worth'])
-const WRITE_TOOLS = new Set(['create_transaction', 'undo_last_action', 'remember_fact', 'forget_fact'])
+const WRITE_TOOLS = new Set(['create_transaction', 'create_transfer', 'undo_last_action', 'remember_fact', 'forget_fact'])
 
 export type GuardVerdict =
   | { action: 'accept' }
@@ -33,11 +35,12 @@ export type GuardVerdict =
 const succeeded = (log: ToolCallRecord[], ...names: string[]) => log.some((call) => names.includes(call.name) && call.ok)
 
 /** Câu khẳng định nào chưa có tool thật đứng sau? */
-function unbackedClaim(reply: string, log: ToolCallRecord[]): 'write' | 'undo' | 'remember' | 'forget' | null {
+function unbackedClaim(reply: string, log: ToolCallRecord[]): 'write' | 'transfer' | 'undo' | 'remember' | 'forget' | null {
   if (MEMORY_CLAIM.test(reply) && !succeeded(log, 'remember_fact')) return 'remember'
   if (FORGET_CLAIM.test(reply) && !succeeded(log, 'forget_fact')) return 'forget'
   if (WRITE_CLAIM.test(reply) && !succeeded(log, 'create_transaction')) return 'write'
   if (SAVE_CLAIM.test(reply) && !succeeded(log, 'create_transaction', 'remember_fact')) return 'write'
+  if (TRANSFER_CLAIM.test(reply) && !succeeded(log, 'create_transfer')) return 'transfer'
   if (UNDO_CLAIM.test(reply) && !succeeded(log, 'undo_last_action')) return 'undo'
   if (DELETE_CLAIM.test(reply) && !succeeded(log, 'undo_last_action', 'forget_fact')) return 'undo'
   return null
@@ -46,6 +49,8 @@ function unbackedClaim(reply: string, log: ToolCallRecord[]): 'write' | 'undo' |
 const RETRY_NUDGE = {
   write: 'Bạn vừa nói đã ghi giao dịch nhưng chưa gọi create_transaction thành công trong lượt này, nên CHƯA có gì được ghi. ' +
     'Hãy gọi create_transaction ngay bây giờ (hoặc hỏi lại nếu thiếu thông tin), rồi mới xác nhận.',
+  transfer: 'Bạn vừa nói đã chuyển/rút/nộp tiền nhưng chưa gọi create_transfer thành công trong lượt này, nên số dư CHƯA thay đổi. ' +
+    'Hãy gọi create_transfer ngay bây giờ (hoặc hỏi lại nếu chưa rõ tài khoản), rồi mới xác nhận.',
   undo: 'Bạn vừa nói đã hoàn tác nhưng chưa gọi undo_last_action thành công trong lượt này. Hãy gọi tool rồi mới xác nhận.',
   remember: 'Bạn vừa nói đã ghi nhớ nhưng chưa gọi remember_fact thành công trong lượt này, nên CHƯA nhớ gì cả. ' +
     'Hãy gọi remember_fact ngay bây giờ rồi mới xác nhận. Nếu bạn chỉ đang liệt kê những điều đã nhớ từ trước, ' +
@@ -55,6 +60,7 @@ const RETRY_NUDGE = {
 
 const BLOCKED_REPLY = {
   write: 'Xin lỗi, mình CHƯA ghi được giao dịch này. Bạn gửi lại giúp mình (kèm số tiền và nội dung) nhé.',
+  transfer: 'Xin lỗi, mình CHƯA chuyển được khoản này. Bạn nhắn lại giúp mình (số tiền, từ tài khoản nào sang tài khoản nào) nhé.',
   undo: 'Xin lỗi, mình CHƯA hoàn tác được. Bạn thử gõ lại "hoàn tác" nhé.',
   remember: 'Xin lỗi, mình CHƯA ghi nhớ được điều này. Bạn nhắn lại "nhớ là …" giúp mình nhé.',
   forget: 'Xin lỗi, mình CHƯA quên được điều này. Bạn nhắn lại giúp mình nhé.',

@@ -191,7 +191,9 @@
 - [x] `/api/integrations/zalo/{link-code,status}` + DELETE
 - [x] Scripts `bun run ai:chat`, `bun run zalo:webhook`; test `src/ai/aiAssistant.test.ts` (không gọi Claude thật)
 - [x] Trí nhớ dài hạn (2026-11-20): `ai_user_facts` + `remember_fact`/`forget_fact`, chèn vào system prompt
-- [ ] Chưa chạy thử với Zalo thật; chưa có UI liên kết Zalo trên web
+- [x] Bot chạy thật trên Zalo (tunnel cloudflared); UI Liên kết Zalo ở trang Cài đặt
+- [x] Chuyển khoản giữa tài khoản + tiền mặt có số dư (migration 0005), web + bot
+- [ ] Chưa chạy 24/7 (cần VPS)
 
 ## 🔲 Còn Lại — Phase 2
 

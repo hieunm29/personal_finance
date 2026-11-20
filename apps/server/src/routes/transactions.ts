@@ -2,12 +2,14 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import {
   createTransactionSchema,
+  createTransferSchema,
   updateTransactionSchema,
   transactionFilterSchema,
   transactionAnalyticsFilterSchema,
 } from '@pf/shared'
 import {
   createTransaction,
+  createTransfer,
   getTransactions,
   getTransactionById,
   updateTransaction,
@@ -44,6 +46,12 @@ transactions.get('/', zValidator('query', transactionFilterSchema), (c) => {
 transactions.post('/', zValidator('json', createTransactionSchema), (c) => {
   const data = c.req.valid('json')
   const transaction = createTransaction(c.get('userId'), data)
+  return c.json({ data: transaction }, 201)
+})
+
+// Chuyển tiền giữa 2 tài khoản của chính người dùng (rút ATM, nộp tiền, chuyển ngân hàng).
+transactions.post('/transfer', zValidator('json', createTransferSchema), (c) => {
+  const transaction = createTransfer(c.get('userId'), c.req.valid('json'))
   return c.json({ data: transaction }, 201)
 })
 

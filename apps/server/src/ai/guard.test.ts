@@ -55,6 +55,15 @@ describe('hallucination guard', () => {
     expect(checkReply('Đã lưu lại sở thích của bạn.', remembered).action).toBe('accept')
   })
 
+  test('transfer claims need a successful create_transfer', () => {
+    expect(checkReply('⇄ Đã chuyển 2.000.000đ: VPB → Tiền mặt.', []).action).toBe('retry')
+    expect(checkReply('Đã rút 2.000.000đ về tiền mặt.', created).action).toBe('retry')
+    expect(finalizeReply('Đã rút 2.000.000đ về tiền mặt.', [])).toMatch(/CHƯA chuyển/)
+    expect(checkReply('⇄ Đã chuyển 2.000.000đ: VPB → Tiền mặt.', [{ name: 'create_transfer', ok: true }]).action).toBe('accept')
+    // Ghi một khoản chi có chữ "chuyển" trong nội dung không bị coi là chuyển khoản.
+    expect(checkReply('Đã ghi: chi 5.000.000đ – chuyển cho mẹ.', created).action).toBe('accept')
+  })
+
   test('action notes are recorded for history and never shown to the user', () => {
     expect(buildActionNote(created)).toBe('[Hệ thống ghi nhận: create_transaction thành công (id tx-1)]')
     expect(buildActionNote([])).toMatch(/không gọi công cụ nào/)

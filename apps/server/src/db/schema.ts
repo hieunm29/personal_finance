@@ -117,6 +117,7 @@ export const transactions = sqliteTable('transactions', {
   assetId: text('asset_id').references(() => assets.id), // for bank asset transactions
   recurringTemplateId: text('recurring_template_id'), // nullable link for transactions created from a recurring schedule
   toWalletId: text('to_wallet_id').references(() => wallets.id),
+  toAssetId: text('to_asset_id').references(() => assets.id), // transfer: tài khoản đích (tiền mặt / ngân hàng)
   date: text('date').notNull(), // YYYY-MM-DD
   note: text('note'),
   isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),

@@ -1,19 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import { strict as assert } from 'node:assert'
 import { Database } from 'bun:sqlite'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const CHILD_FLAG = 'PF_RECURRING_INTEGRATION_CHILD'
 
 function applyMigrations(sqlite: Database) {
-  for (const file of [
-    '../db/migrations/0000_same_reavers.sql',
-    '../db/migrations/0001_sticky_maverick.sql',
-    '../db/migrations/0002_transaction_asset_references.sql',
-  ]) {
-    for (const statement of readFileSync(join(import.meta.dir, file), 'utf8').split(/--> statement-breakpoint/).map((part) => part.trim()).filter(Boolean)) {
+  const directory = join(import.meta.dir, '../db/migrations')
+  for (const file of readdirSync(directory).filter((name) => name.endsWith('.sql')).sort()) {
+    for (const statement of readFileSync(join(directory, file), 'utf8').split(/--> statement-breakpoint/).map((part) => part.trim()).filter(Boolean)) {
       sqlite.run(statement)
     }
   }

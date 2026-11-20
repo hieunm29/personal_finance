@@ -48,6 +48,39 @@ describe('database migration runner', () => {
     expect(runMigrations(path)).toEqual({ applied: [], adopted: [] })
   }))
 
+  test('converts balance-less wallets into cash assets and keeps bank references', () => withTemporaryDatabase(path => {
+    legacyDatabase(path)
+    const setup = new Database(path)
+    // Giao dịch chỉ gắn ví (không có asset) → phải chuyển sang tài sản tiền mặt mới.
+    setup.run("INSERT INTO transactions (id,user_id,type,amount,category_id,wallet_id,date) VALUES ('cash-only','profile','expense',500,'category','wallet','2026-10-26')")
+    setup.close()
+    runMigrations(path)
+    const database = new Database(path)
+    const cash = database.query("SELECT id, name, current_value FROM assets WHERE type = 'cash'").all() as { id: string; name: string; current_value: number }[]
+    expect(cash).toHaveLength(1)
+    expect(cash[0].name).toBe('Cash')
+    expect(cash[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(database.query("SELECT asset_id, wallet_id FROM transactions WHERE id = 'cash-only'").get()).toEqual({ asset_id: cash[0].id, wallet_id: null })
+    // Đã có asset ngân hàng → giữ nguyên, chỉ bỏ wallet_id.
+    expect(database.query("SELECT asset_id, wallet_id FROM transactions WHERE id = 'transaction'").get()).toEqual({ asset_id: 'asset', wallet_id: null })
+    expect(database.query('SELECT COUNT(*) AS n FROM wallets').get()).toEqual({ n: 0 })
+    expect(database.query("SELECT name FROM sqlite_master WHERE name = '_wallet_asset_map'").get()).toBeNull()
+    database.close()
+  }))
+
+  test('reuses an existing cash asset instead of creating a duplicate', () => withTemporaryDatabase(path => {
+    legacyDatabase(path)
+    const setup = new Database(path)
+    setup.run("INSERT INTO assets (id,user_id,name,type,current_value) VALUES ('my-cash','profile','Ví tiền mặt','cash',5000)")
+    setup.run("INSERT INTO transactions (id,user_id,type,amount,category_id,wallet_id,date) VALUES ('cash-only','profile','expense',500,'category','wallet','2026-10-26')")
+    setup.close()
+    runMigrations(path)
+    const database = new Database(path)
+    expect(database.query("SELECT COUNT(*) AS n FROM assets WHERE type = 'cash'").get()).toEqual({ n: 1 })
+    expect(database.query("SELECT asset_id FROM transactions WHERE id = 'cash-only'").get()).toEqual({ asset_id: 'my-cash' })
+    database.close()
+  }))
+
   test('rolls back rather than accepting broken foreign keys', () => withTemporaryDatabase(path => {
     legacyDatabase(path)
     const before = new Database(path)

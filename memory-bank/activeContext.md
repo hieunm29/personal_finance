@@ -6,7 +6,12 @@
 
 ---
 
-## Các Thay đổi Gần đây (2026-11-20) — Trí nhớ dài hạn cho AI
+## Các Thay đổi Gần đây (2026-11-20) — Chuyển khoản & tiền mặt có số dư
+- Chuyển tiền giữa tài khoản (rút ATM, nộp tiền, chuyển ngân hàng): `POST /api/transactions/transfer`, nút "⇄ Chuyển khoản" trong form, tool bot `create_transfer` (hoàn tác được). Thiết kế: `doc/8.transfer_design.md`.
+- Ví (`wallets`, không có số dư) đã được migration 0005 chuyển thành tài sản `cash`; tài khoản giao dịch giờ là tài sản cash/bank (`asset-<uuid>`).
+- Liên kết Zalo trên trang Cài đặt; bot chạy qua cloudflared quick tunnel (URL đổi mỗi lần khởi động lại → sửa PUBLIC_BASE_URL + `bun run zalo:webhook`).
+
+## Các Thay đổi (2026-11-20) — Trí nhớ dài hạn cho AI
 - Bảng `ai_user_facts` (migration 0004) + tool `remember_fact` / `forget_fact`; danh sách được chèn vào system prompt mỗi lượt. `/reset` chỉ xóa lịch sử chat, không xóa điều đã nhớ.
 - Guard kiểm tra thêm câu "Đã ghi nhớ"/"Đã quên"; "Đã ghi nhớ" không còn bị coi là ghi giao dịch.
 

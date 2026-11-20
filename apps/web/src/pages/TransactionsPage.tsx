@@ -163,7 +163,7 @@ function DailyChart({ month, points, currency, onSelect }: { month: string; poin
 function TransactionRow({ txn, currency, selected, onSelect, onEdit, onDelete }: { txn: TransactionWithRelations; currency: string; selected: boolean; onSelect: () => void; onEdit: () => void; onDelete: () => void }) {
   const isIncome = txn.type === 'income'
   const isTransfer = txn.type === 'transfer'
-  const accountLabel = isTransfer ? `${txn.wallet?.name ?? txn.asset?.name ?? '—'} → ${txn.toWallet?.name ?? '—'}` : txn.wallet?.name ?? txn.asset?.name ?? '—'
+  const accountLabel = isTransfer ? `${txn.wallet?.name ?? txn.asset?.name ?? '—'} → ${txn.toWallet?.name ?? txn.toAsset?.name ?? '—'}` : txn.wallet?.name ?? txn.asset?.name ?? '—'
   return <div className={`tx-row ${selected ? 'selected' : ''}`}>
     <button type="button" className="tx-row-select" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
     <span className={`tx-row-icon ${isIncome ? 'income' : isTransfer ? 'transfer' : 'expense'}`}><TransactionIcon txn={txn} /></span>
@@ -225,7 +225,7 @@ export default function TransactionsPage() {
   const currency = profileData?.data?.currency ?? 'VND'
   const options = useMemo<WalletOption[]>(() => [
     ...(walletsData?.data ?? []).map((wallet: Wallet) => ({ id: wallet.id, name: wallet.name, kind: 'wallet' as const })),
-    ...(assetsData?.data ?? []).filter((asset: Asset) => asset.type === 'bank').map((asset: Asset) => ({ id: `asset-${asset.id}`, name: asset.name, kind: 'asset' as const })),
+    ...(assetsData?.data ?? []).filter((asset: Asset) => asset.type === 'bank' || asset.type === 'cash').map((asset: Asset) => ({ id: `asset-${asset.id}`, name: asset.name, kind: 'asset' as const })),
   ], [walletsData?.data, assetsData?.data])
   const selectedWalletIds = useMemo(() => new Set((filters.walletIds ?? '').split(',').filter(Boolean)), [filters.walletIds])
   const selected = transactions.find((txn) => txn.id === selectedId) ?? (routeEditData?.data as TransactionWithRelations | undefined) ?? null
@@ -355,7 +355,7 @@ function TransactionDetail({ txn, currency, budget, onClose, onEdit, onDelete, o
   if (!txn) return <article className="tx-detail-card tx-detail-empty"><p>Chọn một giao dịch để xem chi tiết</p></article>
   const isIncome = txn.type === 'income'
   const isTransfer = txn.type === 'transfer'
-  const accountLabel = isTransfer ? `${txn.wallet?.name ?? txn.asset?.name ?? '—'} → ${txn.toWallet?.name ?? '—'}` : txn.wallet?.name ?? txn.asset?.name ?? '—'
+  const accountLabel = isTransfer ? `${txn.wallet?.name ?? txn.asset?.name ?? '—'} → ${txn.toWallet?.name ?? txn.toAsset?.name ?? '—'}` : txn.wallet?.name ?? txn.asset?.name ?? '—'
   const budgetItem = budget?.categories?.find((item) => item.categoryId === txn.categoryId)
   return <article className="tx-detail-card" aria-label="Chi tiết giao dịch"><div className="tx-card-head"><h2>Chi tiết giao dịch</h2><IconButton label="Đóng chi tiết" onClick={onClose}>×</IconButton></div><div className="tx-detail-top"><span className={`tx-detail-icon ${isIncome ? 'income' : isTransfer ? 'transfer' : 'expense'}`}><TransactionIcon txn={txn} size={26} /></span><div><div className={`tx-detail-amount ${isIncome ? 'income' : isTransfer ? 'transfer' : 'expense'}`}>{isIncome ? '+' : isTransfer ? '' : '−'}{formatCurrency(txn.amount, currency)}</div><p>{txn.note || txn.category?.name || 'Giao dịch'}</p></div></div><dl className="tx-detail-list"><dt>Loại</dt><dd><span className={`tx-badge ${isIncome ? 'good' : isTransfer ? 'neutral' : 'bad'}`}>{isIncome ? 'Thu nhập' : isTransfer ? 'Chuyển khoản' : 'Chi tiêu'}</span></dd><dt>Danh mục</dt><dd><button type="button" className="tx-category-link" onClick={onCategorySelect}><i className="tx-color-dot" style={{ background: txn.category?.color ?? '#94a3b8' }} />{txn.category?.name ?? 'Không phân loại'}</button></dd><dt>Ví / Tài khoản</dt><dd>{accountLabel}</dd><dt>Ngày</dt><dd>{formatLongDate(txn.date)}</dd><dt>Ghi chú</dt><dd>{txn.note || '—'}</dd>{budgetItem && <><dt>Ngân sách</dt><dd className="tx-budget-detail"><div className="tx-progress"><span style={{ width: `${Math.min(budgetItem.percentage, 100)}%`, background: budgetItem.percentage >= 100 ? '#dc2626' : budgetItem.percentage >= 80 ? '#d97706' : '#059669' }} /></div><small>{budgetItem.category?.name ?? txn.category?.name} đã dùng {budgetItem.percentage}% ({formatCurrency(budgetItem.spent, currency)} / {formatCurrency(budgetItem.limitAmount, currency)})</small></dd></>}</dl>{!isTransfer && <div className="tx-detail-actions"><button type="button" className="tx-button" onClick={onEdit}>✎ Chỉnh sửa</button><button type="button" className="tx-button danger" onClick={onDelete}>⌫ Xóa</button></div>}{isTransfer && <div className="tx-detail-actions"><button type="button" className="tx-button danger" onClick={onDelete}>⌫ Xóa</button></div>}{!isTransfer && <div className="tx-note-box">ⓘ Không thể đổi loại thu ↔ chi. Hãy xoá và tạo giao dịch mới.</div>}</article>
 }

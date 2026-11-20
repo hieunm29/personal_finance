@@ -84,6 +84,8 @@ export interface Transaction {
   recurringTemplateId: string | null
   recurrenceInterval: RecurrenceInterval | null
   toWalletId: string | null
+  /** Chuyển khoản: tài khoản đích. */
+  toAssetId: string | null
   date: string
   note: string | null
   isRecurring: boolean
@@ -96,6 +98,7 @@ export interface TransactionWithRelations extends Transaction {
   wallet: Wallet | null
   toWallet: Wallet | null
   asset: Asset | null
+  toAsset?: Pick<Asset, 'id' | 'name' | 'type' | 'currentValue'> | null
 }
 
 export interface Budget {

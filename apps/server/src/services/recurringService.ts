@@ -30,7 +30,7 @@ function validateCategoryAndAccount(profileId: string, data: { type: string; cat
     const asset = db.select({ id: assets.id, userId: assets.userId, type: assets.type }).from(assets)
       .where(eq(assets.id, assetId)).get()
     if (!asset || asset.userId !== profileId) throw Object.assign(new Error('Asset not found'), { status: 404 })
-    if (asset.type !== 'bank') throw Object.assign(new Error('Wallet must be a bank asset'), { status: 400 })
+    if (asset.type !== 'bank' && asset.type !== 'cash') throw Object.assign(new Error('Tài khoản phải là tiền mặt hoặc ngân hàng'), { status: 400 })
     return { walletId: null, assetId }
   }
 
