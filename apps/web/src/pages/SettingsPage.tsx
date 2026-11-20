@@ -254,6 +254,126 @@ function ChangePasswordSection() {
   )
 }
 
+// ─── Zalo Link Section ──────────────────────────────────────
+
+type ZaloLinkStatus = { linked: false } | { linked: true; displayName: string | null; createdAt: string }
+
+function ZaloLinkSection() {
+  const queryClient = useQueryClient()
+  const [linkCode, setLinkCode] = useState<{ code: string; expiresAt: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ type: 'error' | 'info'; text: string } | null>(null)
+
+  const { data: status, isPending, refetch, isFetching } = useQuery({
+    queryKey: QUERY_KEYS.zaloLink,
+    queryFn: () => apiClient<ZaloLinkStatus>('/integrations/zalo/status'),
+  })
+
+  const createCode = async () => {
+    setBusy(true)
+    setMessage(null)
+    try {
+      setLinkCode(await apiClient<{ code: string; expiresAt: string }>('/integrations/zalo/link-code', { method: 'POST' }))
+    } catch {
+      setMessage({ type: 'error', text: 'Không tạo được mã, thử lại' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const checkLinked = async () => {
+    setMessage(null)
+    const { data } = await refetch()
+    if (data?.linked) setLinkCode(null)
+    else setMessage({ type: 'info', text: 'Chưa thấy liên kết. Hãy gửi mã cho bot rồi kiểm tra lại.' })
+  }
+
+  const unlinkZalo = async () => {
+    if (!window.confirm('Hủy liên kết Zalo? Bot sẽ không nhận tin nhắn của bạn nữa.')) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      await apiClient('/integrations/zalo', { method: 'DELETE' })
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.zaloLink })
+    } catch {
+      setMessage({ type: 'error', text: 'Hủy liên kết thất bại, thử lại' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (isPending) {
+    return <div className="text-sm text-gray-400">Đang tải...</div>
+  }
+
+  const expiresAt = linkCode
+    ? new Date(linkCode.expiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    : ''
+
+  return (
+    <section className="rounded-lg bg-white p-6 shadow-sm">
+      <h2 className="mb-4 text-base font-semibold text-gray-900">Liên kết Zalo</h2>
+
+      <div className="space-y-4 max-w-md">
+        {status?.linked ? (
+          <>
+            <p className="text-sm text-gray-700">
+              <span className="text-green-600">✔</span> Đã liên kết với Zalo
+              {status.displayName ? <>: <span className="font-medium">{status.displayName}</span></> : null}
+            </p>
+            <button
+              type="button"
+              onClick={unlinkZalo}
+              disabled={busy}
+              className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? 'Đang hủy...' : 'Hủy liên kết'}
+            </button>
+          </>
+        ) : linkCode ? (
+          <>
+            <div className="inline-block rounded-md border border-gray-300 bg-gray-50 px-4 py-2 font-mono text-2xl font-semibold tracking-widest text-gray-900">
+              {linkCode.code}
+            </div>
+            <p className="text-sm text-gray-700">
+              Gửi <span className="font-mono font-medium">/link {linkCode.code}</span> cho bot trên Zalo. Mã hết hạn lúc {expiresAt}.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={checkLinked}
+                disabled={isFetching}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isFetching ? 'Đang kiểm tra...' : 'Tôi đã gửi, kiểm tra'}
+              </button>
+              <button type="button" onClick={createCode} disabled={busy} className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50">
+                Tạo mã mới
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-700">Chat với trợ lý AI qua Zalo để ghi thu chi và hỏi thống kê.</p>
+            <button
+              type="button"
+              onClick={createCode}
+              disabled={busy}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? 'Đang tạo...' : 'Tạo mã liên kết'}
+            </button>
+          </>
+        )}
+
+        {message && (
+          <p className={`text-sm ${message.type === 'error' ? 'text-red-600' : 'text-gray-500'}`}>{message.text}</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // ─── Page ───────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -262,6 +382,7 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold text-gray-900">Cài đặt</h1>
       <ProfileSection />
       <ChangePasswordSection />
+      <ZaloLinkSection />
     </div>
   )
 }

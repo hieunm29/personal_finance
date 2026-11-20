@@ -115,6 +115,7 @@ export const QUERY_KEYS = {
   budgetHistory: ['budgets', 'history'] as const,
   assets: ['assets'] as const,
   reports: ['reports'] as const,
+  zaloLink: ['integrations', 'zalo'] as const,
 } as const
 
 // Route paths
