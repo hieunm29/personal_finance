@@ -1,4 +1,5 @@
 import './chartSetup'
+import { useId, useMemo, useState } from 'react'
 import { BarController, Chart as ChartJS, LineController } from 'chart.js'
 import type { ChartData, ChartOptions } from 'chart.js'
 import { Chart } from 'react-chartjs-2'
@@ -14,45 +15,50 @@ function formatRate(value: number) {
   return `${rate.format(value)}%`
 }
 
-const options: ChartOptions<'bar' | 'line'> = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false,
-  interaction: { mode: 'index', intersect: false },
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      callbacks: {
-        label: ({ dataset, parsed }) => {
-          const value = parsed.y
-          if (value === null) return ''
-          return dataset.yAxisID === 'rate'
-            ? `${dataset.label}: ${formatRate(value)}`
-            : `${dataset.label}: ${formatCurrency(value)}`
+function getChartOptions(currency: string): ChartOptions<'bar' | 'line'> {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ({ dataset, parsed }) => {
+            const value = parsed.y
+            if (value === null) return ''
+            return dataset.yAxisID === 'rate'
+              ? `${dataset.label}: ${formatRate(value)}`
+              : `${dataset.label}: ${formatCurrency(value, currency)}`
+          },
         },
       },
     },
-  },
-  scales: {
-    x: { grid: { display: false }, ticks: { autoSkip: false, color: '#64748b' } },
-    amount: {
-      type: 'linear',
-      position: 'left',
-      beginAtZero: true,
-      grid: { color: '#e9edf4' },
-      ticks: { color: '#64748b', maxTicksLimit: 5, callback: (value) => compactAmount.format(Number(value) / 100) },
+    scales: {
+      x: { grid: { display: false }, ticks: { autoSkip: false, color: '#64748b' } },
+      amount: {
+        type: 'linear',
+        position: 'left',
+        beginAtZero: true,
+        grid: { color: '#e9edf4' },
+        ticks: { color: '#64748b', maxTicksLimit: 5, callback: (value) => compactAmount.format(Number(value) / 100) },
+      },
+      rate: {
+        type: 'linear',
+        position: 'right',
+        beginAtZero: true,
+        grid: { drawOnChartArea: false },
+        ticks: { color: '#64748b', maxTicksLimit: 5, callback: (value) => formatRate(Number(value)) },
+      },
     },
-    rate: {
-      type: 'linear',
-      position: 'right',
-      beginAtZero: true,
-      grid: { drawOnChartArea: false },
-      ticks: { color: '#64748b', maxTicksLimit: 5, callback: (value) => formatRate(Number(value)) },
-    },
-  },
+  }
 }
 
-export default function CashflowTrendChart({ data }: { data: TrendDataPoint[] }) {
+export default function CashflowTrendChart({ data, currency }: { data: TrendDataPoint[]; currency: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const tableId = useId()
+  const options = useMemo(() => getChartOptions(currency), [currency])
   const chartData: ChartData<'bar' | 'line', (number | null)[], string> = {
     labels: data.map(({ month }) => `T${Number(month.slice(5))}`),
     datasets: [
@@ -103,9 +109,12 @@ export default function CashflowTrendChart({ data }: { data: TrendDataPoint[] })
           aria-label="Tổng thu, tổng chi và tỷ lệ tiết kiệm theo tháng"
         />
       </div>
-      <details className="reports-chart-data reports-print-hide">
-        <summary>Xem số liệu theo tháng</summary>
-        <table className="report-table">
+      <div className="reports-chart-data">
+        <button type="button" className="reports-print-hide" aria-expanded={expanded}
+          aria-controls={tableId} onClick={() => setExpanded(!expanded)}>
+          {expanded ? 'Ẩn số liệu theo tháng' : 'Xem số liệu theo tháng'}
+        </button>
+        <table id={tableId} className={`report-table${expanded ? '' : ' reports-screen-hide'}`}>
           <caption className="sr-only">Dòng tiền theo tháng</caption>
           <thead>
             <tr>
@@ -119,8 +128,8 @@ export default function CashflowTrendChart({ data }: { data: TrendDataPoint[] })
             {data.map(({ month, totalIncome, totalExpense, savingsRate }) => (
               <tr key={month}>
                 <th scope="row">{month.slice(5)}/{month.slice(0, 4)}</th>
-                <td className="report-table__align-right">{formatCurrency(totalIncome)}</td>
-                <td className="report-table__align-right">{formatCurrency(totalExpense)}</td>
+                <td className="report-table__align-right">{formatCurrency(totalIncome, currency)}</td>
+                <td className="report-table__align-right">{formatCurrency(totalExpense, currency)}</td>
                 <td className="report-table__align-right">
                   {savingsRate === null ? 'Không có' : formatRate(savingsRate)}
                 </td>
@@ -128,7 +137,7 @@ export default function CashflowTrendChart({ data }: { data: TrendDataPoint[] })
             ))}
           </tbody>
         </table>
-      </details>
+      </div>
     </>
   )
 }

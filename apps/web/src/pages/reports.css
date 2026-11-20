@@ -420,7 +420,7 @@ main:has(> .finance-reports) {
   margin-top: 12px;
 }
 
-.reports-chart-data summary {
+.reports-chart-data button {
   width: fit-content;
   padding: 4px 0;
   color: var(--reports-brand);
@@ -577,6 +577,55 @@ main:has(> .finance-reports) {
   overflow-wrap: anywhere;
 }
 
+.reports-previous-period {
+  display: block;
+  font-size: 12px;
+}
+
+.reports-drilldown {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--reports-border);
+  border-radius: 12px;
+  color: #0f172a;
+  background: #fff;
+  box-shadow: 0 16px 46px #0f172a30;
+}
+
+.reports-drilldown::backdrop {
+  background: #0f172a66;
+}
+
+.reports-drilldown header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--reports-border);
+  font-weight: 600;
+}
+
+.reports-drilldown header button {
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.reports-drilldown-body {
+  max-height: min(480px, 65dvh);
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+@media screen {
+  .reports-chart-data .reports-screen-hide {
+    display: none;
+  }
+}
+
 .reports-printed-tab {
   display: none;
 }
@@ -689,8 +738,7 @@ main:has(> .finance-reports) {
   }
 
   #root :has(.finance-reports) > :not(:has(.finance-reports), .finance-reports),
-  .finance-reports .reports-print-hide,
-  .finance-reports .modal-overlay {
+  .finance-reports .reports-print-hide {
     display: none !important;
   }
 

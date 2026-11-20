@@ -12,10 +12,11 @@ const fmt = (v: number) => {
 }
 
 interface Props {
+  currency?: string
   data: BudgetComparisonItem[]
 }
 
-export default function BudgetComparisonChart({ data }: Props) {
+export default function BudgetComparisonChart({ data, currency }: Props) {
   if (data.length === 0) {
     return (
       <div
@@ -67,7 +68,7 @@ export default function BudgetComparisonChart({ data }: Props) {
       tooltip: {
         callbacks: {
           label: (ctx: { dataset: { label?: string }; raw: unknown }) =>
-            `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number)}`,
+            `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number, currency)}`,
         },
       },
     },

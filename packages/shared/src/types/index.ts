@@ -338,7 +338,7 @@ export interface TrendDataPoint {
 }
 
 export interface BudgetComparisonItem {
-  categoryId: string
+  categoryId: string | null
   categoryName: string
   categoryIcon: string | null
   budgetAmount: number

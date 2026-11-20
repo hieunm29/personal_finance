@@ -13,10 +13,11 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 interface Props {
+  currency?: string
   data: AssetAllocationItem[]
 }
 
-export default function AssetAllocationChart({ data }: Props) {
+export default function AssetAllocationChart({ data, currency }: Props) {
   const filtered = data.filter((item) => item.totalValue > 0 && item.type !== 'debt')
 
   if (filtered.length === 0) {
@@ -67,7 +68,7 @@ export default function AssetAllocationChart({ data }: Props) {
             const total = (ctx.dataset.data as number[]).reduce((a, b) => a + b, 0)
             const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
             const item = filtered[ctx.dataIndex]
-            return `${item.label}: ${formatCurrency(value)} (${percentage}%)`
+            return `${item.label}: ${formatCurrency(value, currency)} (${percentage}%)`
           },
         },
       },

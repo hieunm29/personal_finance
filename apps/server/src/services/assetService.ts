@@ -239,27 +239,28 @@ export function getNetWorthHistory(authUserId: string, limit?: number): NetWorth
   }).from(assetHistory)
     .innerJoin(assets, eq(assetHistory.assetId, assets.id))
     .where(eq(assets.userId, profileId))
-    .orderBy(assetHistory.date, assetHistory.createdAt)
+    .orderBy(assetHistory.date, assetHistory.createdAt, sql`asset_history.rowid`)
     .all()
 
-  // Group by month, then track latest value per asset within each month
-  const monthMap = new Map<string, Map<string, { value: number; type: string }>>()
-  for (const row of rows) {
-    const month = row.date.substring(0, 7)
-    if (!monthMap.has(month)) monthMap.set(month, new Map())
-    monthMap.get(month)!.set(row.assetId, { value: row.value, type: row.type })
-  }
+  if (rows.length === 0) return []
 
+  const values = new Map<string, number>()
   const result: NetWorthHistoryPoint[] = []
-  for (const [month, assetMap] of Array.from(monthMap.entries()).sort()) {
-    let netWorth = 0
-    for (const { value, type } of assetMap.values()) {
-      if (type === 'debt') netWorth -= value
-      else netWorth += value
+  const cursor = new Date(`${rows[0].date.slice(0, 7)}-01T00:00:00Z`)
+  const lastMonth = new Date(`${rows[rows.length - 1].date.slice(0, 7)}-01T00:00:00Z`)
+  let netWorth = 0
+  let index = 0
+  while (cursor <= lastMonth) {
+    const month = cursor.toISOString().slice(0, 7)
+    while (index < rows.length && rows[index].date.slice(0, 7) === month) {
+      const row = rows[index++]
+      const value = row.type === 'debt' ? -row.value : row.value
+      netWorth += value - (values.get(row.assetId) ?? 0)
+      values.set(row.assetId, value)
     }
     result.push({ month, netWorth })
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1)
   }
-
   return limit ? result.slice(-limit) : result
 }
 

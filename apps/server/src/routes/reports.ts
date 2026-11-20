@@ -6,6 +6,16 @@ import * as reportService from '../services/reportService'
 type Variables = { userId: string }
 const app = new Hono<{ Variables: Variables }>()
 
+// An in-flight request can outlive the browser account that owns its report cache.
+app.use('*', async (c, next) => {
+  c.header('Cache-Control', 'no-store')
+  const expectedAccount = c.req.header('X-Report-Account')
+  if (expectedAccount !== undefined && expectedAccount !== c.get('userId')) {
+    return c.json({ error: { code: 'ACCOUNT_CHANGED', message: 'Tài khoản đã thay đổi.' } }, 409)
+  }
+  await next()
+})
+
 const reportDate = z.string().date().refine((date) => !date.startsWith('0000-'))
 const reportDateRangeQuery = z.object({ startDate: reportDate, endDate: reportDate })
 const optionalReportDateRangeQuery = reportDateRangeQuery.partial()

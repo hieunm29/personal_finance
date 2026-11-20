@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { MonthlyOverview, ReportInsight, ReportPeriodOverview, ReportTabId } from '@pf/shared'
 import { useNavigate } from 'react-router'
@@ -12,6 +12,7 @@ import {
   useNetWorthHistory,
   useReportInsights,
   useReportOverview,
+  useReportProfile,
   useTopExpenses,
 } from '../hooks/useReports'
 import { authClient } from '../lib/auth-client'
@@ -205,7 +206,7 @@ const signedNumberFormat = new Intl.NumberFormat('vi-VN', {
   signDisplay: 'exceptZero',
 })
 
-function OverviewMetrics({ data }: { data: ReportPeriodOverview }) {
+function OverviewMetrics({ data, currency }: { currency: string; data: ReportPeriodOverview }) {
   const { current, previous, changes } = data
   if (current.transactionCount === 0) {
     return <ReportStatus message="Chưa có giao dịch trong kỳ này." />
@@ -219,22 +220,22 @@ function OverviewMetrics({ data }: { data: ReportPeriodOverview }) {
     <div className="report-metric-grid report-metric-grid--dense">
       <MetricCard
         label="Tổng thu"
-        value={formatCurrency(current.totalIncome)}
+        value={formatCurrency(current.totalIncome, currency)}
         meta={`${changes.incomePercent === null ? '' : 'so với kỳ trước · '}${current.incomeCount} giao dịch`}
         change={changes.incomePercent}
         tone="income"
       />
       <MetricCard
         label="Tổng chi"
-        value={formatCurrency(current.totalExpense)}
+        value={formatCurrency(current.totalExpense, currency)}
         meta={`${changes.expensePercent === null ? '' : 'so với kỳ trước · '}${current.expenseCount} giao dịch`}
         change={changes.expensePercent}
         tone="expense"
       />
       <MetricCard
         label="Tiết kiệm"
-        value={formatCurrency(current.difference)}
-        meta={previousLabel && previous ? `${previousLabel}: ${formatCurrency(previous.overview.difference)}` : undefined}
+        value={formatCurrency(current.difference, currency)}
+        meta={previousLabel && previous ? `${previousLabel}: ${formatCurrency(previous.overview.difference, currency)}` : undefined}
         change={changes.savingsPercent}
         tone="savings"
       />
@@ -257,13 +258,13 @@ const INSIGHT_TONES = {
   top_expense: { icon: '≡', tone: 'savings' },
 } as const
 
-function InsightCards({ insights }: { insights: ReportInsight[] }) {
+function InsightCards({ insights, currency }: { currency: string; insights: ReportInsight[] }) {
   return (
     <ul className="reports-insights">
       {insights.map((insight) => {
         const { icon, tone } = INSIGHT_TONES[insight.kind]
         const details = [
-          insight.amount !== undefined ? formatCurrency(insight.amount) : null,
+          insight.amount !== undefined ? formatCurrency(insight.amount, currency) : null,
           insight.percentage !== undefined ? `${numberFormat.format(insight.percentage)}%` : null,
           insight.date ? formatDate(insight.date) : null,
         ].filter(Boolean)
@@ -284,6 +285,7 @@ function InsightCards({ insights }: { insights: ReportInsight[] }) {
 }
 
 function OverviewTab({
+  currency,
   historyStart,
   endDate,
   overview,
@@ -291,6 +293,7 @@ function OverviewTab({
   insights,
   onViewCategories,
 }: {
+  currency: string
   historyStart: string
   endDate: string
   overview: ReturnType<typeof useReportOverview>
@@ -303,7 +306,7 @@ function OverviewTab({
   return (
     <div className="report-section">
       {overview.isLoading ? <ReportStatus message="Đang tải tổng quan…" /> : overview.data
-        ? <OverviewMetrics data={overview.data} />
+        ? <OverviewMetrics currency={currency} data={overview.data} />
         : <ReportStatus message="Không thể tải tổng quan." error />}
 
       <div className="report-grid reports-overview-grid">
@@ -320,14 +323,14 @@ function OverviewTab({
         >
           {trend.isLoading ? <ReportStatus message="Đang tải dòng tiền…" /> : trend.isError && !trend.data
             ? <ReportStatus message="Không thể tải dòng tiền." error />
-            : hasTrendActivity && trend.data ? <CashflowTrendChart data={trend.data} />
+            : hasTrendActivity && trend.data ? <CashflowTrendChart currency={currency} data={trend.data} />
               : <ReportStatus message="Chưa có dữ liệu dòng tiền trong 6 tháng này." />}
         </ReportCard>
 
         <ReportCard title="Điểm nổi bật">
           {insights.isLoading ? <ReportStatus message="Đang tải điểm nổi bật…" /> : insights.isError && !insights.data
             ? <ReportStatus message="Không thể tải điểm nổi bật." error />
-            : insights.data?.length ? <InsightCards insights={insights.data} />
+            : insights.data?.length ? <InsightCards currency={currency} insights={insights.data} />
               : <ReportStatus message="Chưa có điểm nổi bật trong kỳ này." />}
           <button type="button" className="reports-category-link reports-print-hide" onClick={onViewCategories}>
             Xem chi tiết theo danh mục <span aria-hidden="true">→</span>
@@ -339,9 +342,11 @@ function OverviewTab({
 }
 
 function CategoriesTab({
+  currency,
   period,
   query,
 }: {
+  currency: string
   period: ReportPeriod
   query: ReturnType<typeof useExpensesByCategory>
 }) {
@@ -359,7 +364,7 @@ function CategoriesTab({
           title="Cơ cấu chi tiêu"
           subtitle="Tỷ trọng từng danh mục trong kỳ đã chọn."
         >
-          <CategoryPieChart data={categories || []} />
+          <CategoryPieChart currency={currency} data={categories || []} />
         </ReportCard>
 
         <ReportCard
@@ -380,7 +385,10 @@ function CategoriesTab({
                 {categories.map((category) => (
                   <tr
                     key={category.categoryId}
-                    onClick={() => setSelectedCategory({ id: category.categoryId, name: category.categoryName })}
+                    onClick={(event) => {
+                      event.currentTarget.querySelector('button')?.focus()
+                      setSelectedCategory({ id: category.categoryId, name: category.categoryName })
+                    }}
                   >
                     <td>
                       <button
@@ -389,6 +397,7 @@ function CategoriesTab({
                         aria-label={`Xem giao dịch của ${category.categoryName}`}
                         onClick={(event) => {
                           event.stopPropagation()
+                          event.currentTarget.focus()
                           setSelectedCategory({ id: category.categoryId, name: category.categoryName })
                         }}
                       >
@@ -399,7 +408,7 @@ function CategoriesTab({
                       </button>
                     </td>
                     <td className="report-table__align-right report-table__value">
-                      {formatCurrency(category.totalAmount)}
+                      {formatCurrency(category.totalAmount, currency)}
                     </td>
                     <td className="report-table__align-right">
                       <span className="report-percentage-pill">{numberFormat.format(category.percentage)}%</span>
@@ -419,6 +428,7 @@ function CategoriesTab({
 
       {selectedCategory ? (
         <CategoryDrilldownModal
+          currency={currency}
           isOpen={true}
           onClose={() => setSelectedCategory(null)}
           categoryId={selectedCategory.id}
@@ -432,9 +442,11 @@ function CategoriesTab({
 }
 
 function TrendTab({
+  currency,
   trend,
   topExpenses,
 }: {
+  currency: string
   trend: ReturnType<typeof useIncomeExpenseTrend>
   topExpenses: ReturnType<typeof useTopExpenses>
 }) {
@@ -449,13 +461,13 @@ function TrendTab({
         >
           {trend.isLoading ? <ReportStatus message="Đang tải xu hướng…" /> : trend.isError && !trend.data
             ? <ReportStatus message="Không thể tải xu hướng." error />
-            : hasTrendActivity && trend.data ? <TrendLineChart data={trend.data} />
+            : hasTrendActivity && trend.data ? <TrendLineChart currency={currency} data={trend.data} />
               : <ReportStatus message="Chưa có dữ liệu thu chi trong kỳ này." />}
         </ReportCard>
 
         <ReportCard title="Top 10 chi tiêu lớn nhất">
           {topExpenses.isLoading ? <ReportStatus message="Đang tải khoản chi…" /> : topExpenses.data
-            ? <TopExpensesTable data={topExpenses.data} />
+            ? <TopExpensesTable currency={currency} data={topExpenses.data} />
             : <ReportStatus message="Không thể tải các khoản chi." error />}
         </ReportCard>
       </div>
@@ -464,10 +476,12 @@ function TrendTab({
 }
 
 function BudgetTab({
+  currency,
   year,
   month,
   query,
 }: {
+  currency: string
   year: number
   month: number
   query: ReturnType<typeof useBudgetVsActual>
@@ -478,17 +492,19 @@ function BudgetTab({
     <ReportCard title="Ngân sách so với thực tế" subtitle={`Tháng ${month}/${year}`}>
       {isLoading ? <ReportStatus message="Đang tải ngân sách…" /> : isError && !data
         ? <ReportStatus message="Không thể tải ngân sách." error />
-        : <BudgetComparisonChart data={data ?? []} />}
+        : <BudgetComparisonChart currency={currency} data={data ?? []} />}
     </ReportCard>
   )
 }
 
 function AssetsTab({
+  currency,
   allocation,
   history,
   assetHistoryPeriod,
   onPeriodChange,
 }: {
+  currency: string
   allocation: ReturnType<typeof useAssetAllocation>
   history: ReturnType<typeof useNetWorthHistory>
   assetHistoryPeriod: AssetHistoryPeriod
@@ -502,12 +518,13 @@ function AssetsTab({
           subtitle="Tỷ trọng từng nhóm tài sản trong danh mục hiện tại."
         >
           {allocation.isLoading ? <ReportStatus message="Đang tải phân bổ tài sản…" /> : allocation.data
-            ? <AssetAllocationChart data={allocation.data} />
+            ? <AssetAllocationChart currency={currency} data={allocation.data} />
             : <ReportStatus message="Không thể tải phân bổ tài sản." error />}
         </ReportCard>
 
         <ReportCard
           title="Lịch sử tài sản ròng"
+          subtitle={assetHistoryPeriod === 'all' ? 'Toàn bộ lịch sử' : `${assetHistoryPeriod} tháng gần nhất`}
           action={
             <div className="report-toggle-group reports-print-hide" role="group" aria-label="Khung thời gian tài sản ròng">
               {(['6', '12', 'all'] as const).map((period) => (
@@ -525,7 +542,7 @@ function AssetsTab({
           }
         >
           {history.isLoading ? <ReportStatus message="Đang tải lịch sử tài sản ròng…" /> : history.data
-            ? <NetWorthTrendChart data={history.data} />
+            ? <NetWorthTrendChart currency={currency} data={history.data} />
             : <ReportStatus message="Không thể tải lịch sử tài sản ròng." error />}
         </ReportCard>
       </div>
@@ -533,7 +550,7 @@ function AssetsTab({
   )
 }
 
-function AnnualTab({ year, query }: { year: number; query: ReturnType<typeof useAnnualSummary> }) {
+function AnnualTab({ year, query, currency }: { currency: string; year: number; query: ReturnType<typeof useAnnualSummary> }) {
   const { data, isLoading } = query
 
   if (isLoading) return <ReportStatus message="Đang tải báo cáo năm…" />
@@ -543,14 +560,14 @@ function AnnualTab({ year, query }: { year: number; query: ReturnType<typeof use
     <div className="report-section">
       <h2 className="reports-section-title">Tổng kết năm {year}</h2>
       <div className="report-metric-grid report-metric-grid--dense">
-        <MetricCard label="Tổng thu" value={formatCurrency(data.totalIncome)} tone="income" />
-        <MetricCard label="Tổng chi" value={formatCurrency(data.totalExpense)} tone="expense" />
-        <MetricCard label="TB thu / tháng" value={formatCurrency(data.averageIncome)} tone="neutral" />
-        <MetricCard label="TB chi / tháng" value={formatCurrency(data.averageExpense)} tone="savings" />
+        <MetricCard label="Tổng thu" value={formatCurrency(data.totalIncome, currency)} tone="income" />
+        <MetricCard label="Tổng chi" value={formatCurrency(data.totalExpense, currency)} tone="expense" />
+        <MetricCard label="TB thu / tháng" value={formatCurrency(data.averageIncome, currency)} tone="neutral" />
+        <MetricCard label="TB chi / tháng" value={formatCurrency(data.averageExpense, currency)} tone="savings" />
       </div>
 
       <ReportCard title="Biểu đồ thu chi 12 tháng">
-        <AnnualBarChart data={data.monthly} />
+        <AnnualBarChart currency={currency} data={data.monthly} />
       </ReportCard>
 
       <ReportCard title="Bảng chênh lệch theo tháng">
@@ -568,17 +585,17 @@ function AnnualTab({ year, query }: { year: number; query: ReturnType<typeof use
               <tr key={monthItem.month} className={monthItem.difference < 0 ? 'report-table__row--negative' : ''}>
                 <td>Tháng {parseInt(monthItem.month.split('-')[1], 10)}</td>
                 <td className="report-table__align-right report-table__value report-table__value--income">
-                  {formatCurrency(monthItem.income)}
+                  {formatCurrency(monthItem.income, currency)}
                 </td>
                 <td className="report-table__align-right report-table__value report-table__value--expense">
-                  {formatCurrency(monthItem.expense)}
+                  {formatCurrency(monthItem.expense, currency)}
                 </td>
                 <td
                   className={`report-table__align-right report-table__value ${
                     monthItem.difference >= 0 ? 'report-table__value--income' : 'report-table__value--expense'
                   }`}
                 >
-                  {formatCurrency(monthItem.difference)}
+                  {formatCurrency(monthItem.difference, currency)}
                 </td>
               </tr>
             ))}
@@ -591,9 +608,11 @@ function AnnualTab({ year, query }: { year: number; query: ReturnType<typeof use
 
 function PeriodControls({
   period,
+  previous,
   onChange,
 }: {
   period: ReportPeriod
+  previous?: ReportPeriodOverview['previous']
   onChange: (period: ReportPeriod) => void
 }) {
   const [editingPeriod, setEditingPeriod] = useState<ReportPeriod | null>(null)
@@ -643,7 +662,11 @@ function PeriodControls({
 
         <p className="reports-period-summary">
           <ReportIcon path={CALENDAR_ICON} />
-          <span>{formatDate(period.startDate)} – {formatDate(period.endDate)}</span>
+          <span>{formatDate(period.startDate)} – {formatDate(period.endDate)}
+            {previous && <span className="reports-previous-period">
+              Kỳ trước: {formatDate(previous.startDate)} – {formatDate(previous.endDate)}
+            </span>}
+          </span>
         </p>
       </div>
 
@@ -709,7 +732,22 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState(() => getPresetPeriod('this_month'))
   const [assetHistoryPeriod, setAssetHistoryPeriod] = useState<AssetHistoryPeriod>('12')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const mobileToggle = useRef<HTMLButtonElement>(null)
+  const profile = useReportProfile()
   const exportReport = useExportReport()
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const toggle = mobileToggle.current
+    document.querySelector<HTMLElement>('aside nav a[href]')?.focus()
+    function handleKey(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMobileNavOpen(false)
+        toggle?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [mobileNavOpen])
   const exportMenu = useRef<HTMLDetailsElement>(null)
   const { startDate, endDate } = period
   const [year, month] = endDate.split('-').map(Number)
@@ -724,7 +762,7 @@ export default function ReportsPage() {
   const assetsActive = activeTab === 'assets'
   const historyLimit = assetHistoryPeriod === 'all' ? undefined : Number(assetHistoryPeriod)
 
-  const overview = useReportOverview(startDate, endDate, overviewActive)
+  const overview = useReportOverview(startDate, endDate, overviewActive || activeTab === 'categories')
   const insights = useReportInsights(startDate, endDate, overviewActive)
   const trend = useIncomeExpenseTrend(undefined, overviewActive ? historyStart : startDate, endDate, overviewActive || trendActive)
   const categories = useExpensesByCategory(startDate, endDate, activeTab === 'categories')
@@ -734,14 +772,17 @@ export default function ReportsPage() {
   const history = useNetWorthHistory(historyLimit, assetsActive)
   const annual = useAnnualSummary(year, activeTab === 'annual')
 
-  const canPrint = {
-    overview: overview.isSuccess && trend.isSuccess && insights.isSuccess,
-    categories: categories.isSuccess,
-    trend: canUseTrend && trend.isSuccess && topExpenses.isSuccess,
-    budget: budget.isSuccess,
-    assets: allocation.isSuccess && history.isSuccess,
-    annual: annual.isSuccess,
+  const shownQueries = {
+    overview: [overview, trend, insights],
+    categories: [categories, overview],
+    trend: [trend, topExpenses],
+    budget: [budget],
+    assets: [allocation, history],
+    annual: [annual],
   }[activeTab]
+  const canPrint = profile.isSuccess && !profile.isFetching && (activeTab !== 'trend' || canUseTrend)
+    && shownQueries.every(query => query.isSuccess && query.fetchStatus === 'idle')
+  const currency = profile.data?.currency
 
   async function signOut() {
     await authClient.signOut()
@@ -784,10 +825,14 @@ export default function ReportsPage() {
 
         <button
           type="button"
+          ref={mobileToggle}
           className="reports-mobile-nav reports-print-hide"
           aria-label={mobileNavOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
           aria-expanded={mobileNavOpen}
-          onClick={() => setMobileNavOpen((open) => !open)}
+          onClick={() => {
+            if (mobileNavOpen) mobileToggle.current?.focus()
+            setMobileNavOpen(!mobileNavOpen)
+          }}
         >
           <ReportIcon path={mobileNavOpen ? 'm5 5 14 14M19 5 5 19' : 'M4 6h16M4 12h16M4 18h16'} />
         </button>
@@ -818,7 +863,7 @@ export default function ReportsPage() {
               <span>{exportReport.isPending ? 'Đang xuất…' : 'Xuất báo cáo'}</span>
             </summary>
             <div className="reports-export-options">
-              <button type="button" onClick={exportCsv} disabled={exportReport.isPending || (activeTab === 'trend' && !canUseTrend)}>
+              <button type="button" onClick={exportCsv} disabled={!currency || exportReport.isPending || (activeTab === 'trend' && !canUseTrend)}>
                 Tải xuống CSV
               </button>
               <button type="button" onClick={printReport} disabled={!canPrint}>In / Lưu PDF</button>
@@ -836,38 +881,46 @@ export default function ReportsPage() {
         </p>
       ) : null}
 
-      <PeriodControls period={period} onChange={setPeriod} />
+      <PeriodControls period={period} onChange={setPeriod}
+        previous={overviewActive || activeTab === 'categories' ? overview.data?.previous : undefined} />
       <ReportTabs activeTab={activeTab} onChange={setActiveTab} />
-      <p className="reports-printed-tab">{activeLabel}</p>
+      <p className="reports-printed-tab">{activeLabel}{currency ? ` · ${currency}` : ''}</p>
 
       <div id="report-panel" role="tabpanel" aria-labelledby={`report-tab-${activeTab}`} tabIndex={0}>
-        {activeTab === 'overview' ? (
-          <OverviewTab
-            historyStart={historyStart}
-            endDate={endDate}
-            overview={overview}
-            trend={trend}
-            insights={insights}
-            onViewCategories={() => setActiveTab('categories')}
-          />
-        ) : null}
-        {activeTab === 'categories' ? (
-          <CategoriesTab key={`${startDate}:${endDate}`} period={period} query={categories} />
-        ) : null}
-        {activeTab === 'trend' ? canUseTrend
-          ? <TrendTab trend={trend} topExpenses={topExpenses} />
-          : <ReportStatus message="Chọn một kỳ tối đa 12 tháng để xem và xuất báo cáo xu hướng." />
-          : null}
-        {activeTab === 'budget' ? <BudgetTab year={year} month={month} query={budget} /> : null}
-        {activeTab === 'assets' ? (
-          <AssetsTab
-            allocation={allocation}
-            history={history}
-            assetHistoryPeriod={assetHistoryPeriod}
-            onPeriodChange={setAssetHistoryPeriod}
-          />
-        ) : null}
-        {activeTab === 'annual' ? <AnnualTab year={year} query={annual} /> : null}
+        {!currency ? <ReportStatus message={profile.isError ? 'Không thể tải hồ sơ báo cáo.' : 'Đang tải báo cáo…'} error={profile.isError} /> : (
+          <>
+            {activeTab === 'overview' ? (
+              <OverviewTab currency={currency}
+                historyStart={historyStart}
+                endDate={endDate}
+                overview={overview}
+                trend={trend}
+                insights={insights}
+                onViewCategories={() => {
+                  setActiveTab('categories')
+                  document.getElementById('report-tab-categories')?.focus()
+                }}
+              />
+            ) : null}
+            {activeTab === 'categories' ? (
+              <CategoriesTab currency={currency} key={`${profile.data?.authUserId}:${startDate}:${endDate}`} period={period} query={categories} />
+            ) : null}
+            {activeTab === 'trend' ? canUseTrend
+              ? <TrendTab currency={currency} trend={trend} topExpenses={topExpenses} />
+              : <ReportStatus message="Chọn một kỳ tối đa 12 tháng để xem và xuất báo cáo xu hướng." />
+              : null}
+            {activeTab === 'budget' ? <BudgetTab currency={currency} year={year} month={month} query={budget} /> : null}
+            {activeTab === 'assets' ? (
+              <AssetsTab currency={currency}
+                allocation={allocation}
+                history={history}
+                assetHistoryPeriod={assetHistoryPeriod}
+                onPeriodChange={setAssetHistoryPeriod}
+              />
+            ) : null}
+            {activeTab === 'annual' ? <AnnualTab currency={currency} year={year} query={annual} /> : null}
+          </>
+        )}
       </div>
     </div>
   )

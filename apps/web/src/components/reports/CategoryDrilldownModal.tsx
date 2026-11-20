@@ -1,6 +1,5 @@
-import { useEffect, useCallback } from 'react'
-import type { Transaction } from '@pf/shared'
-import { formatCurrency } from '../../utils/format'
+import { useEffect, useId, useRef } from 'react'
+import { formatCurrency, formatDate } from '../../utils/format'
 import { useTransactionsByCategory } from '../../hooks/useReports'
 
 export interface CategoryDrilldownModalProps {
@@ -10,6 +9,7 @@ export interface CategoryDrilldownModalProps {
   categoryName: string
   startDate: string
   endDate: string
+  currency?: string
 }
 
 export function CategoryDrilldownModal({
@@ -19,141 +19,54 @@ export function CategoryDrilldownModal({
   categoryName,
   startDate,
   endDate,
+  currency,
 }: CategoryDrilldownModalProps) {
-  const { data: transactions, isLoading } = useTransactionsByCategory(categoryId, startDate, endDate)
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    },
-    [onClose]
-  )
-
+  const query = useTransactionsByCategory(categoryId, startDate, endDate)
+  const dialog = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      return () => document.removeEventListener('keydown', handleKeyDown)
+    const element = dialog.current
+    if (!isOpen || !element) return
+    const opener = document.activeElement
+    element.showModal()
+    return () => {
+      element.close()
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
     }
-  }, [isOpen, handleKeyDown])
+  }, [isOpen])
 
   if (!isOpen) return null
-
-  // Sort by date DESC, then amount DESC
-  const sortedTransactions = transactions
-    ? [...(transactions as Transaction[])].sort((a, b) => {
-        const dateCompare = b.date.localeCompare(a.date)
-        if (dateCompare !== 0) return dateCompare
-        return b.amount - a.amount
-      })
-    : []
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '16px 20px',
-            borderBottom: '1px solid #e2e8f0',
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e293b' }}>
-            {categoryName}
-          </h3>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px',
-              color: '#94a3b8',
-              fontSize: '18px',
-              lineHeight: 1,
-            }}
-            aria-label="Đóng"
-          >
-            ×
-          </button>
+    <dialog ref={dialog} aria-labelledby={titleId} className="reports-drilldown reports-print-hide"
+      onCancel={(event) => { event.preventDefault(); onClose() }}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section>
+        <header>
+          <h2 id={titleId}>{categoryName}</h2>
+          <button type="button" onClick={onClose} aria-label="Đóng">×</button>
+        </header>
+        <div className="reports-drilldown-body">
+          {query.isPending ? <p role="status">Đang tải giao dịch…</p>
+            : query.isError ? <p role="alert">Không thể tải giao dịch.</p>
+            : !query.data.length ? <p>Không có giao dịch trong kỳ này.</p>
+            : (
+              <table className="report-table">
+                <thead><tr><th>Ngày</th><th className="report-table__align-right">Số tiền</th><th>Ghi chú</th></tr></thead>
+                <tbody>
+                  {query.data.map(transaction => (
+                    <tr key={transaction.id}>
+                      <td>{formatDate(transaction.date)}</td>
+                      <td className="report-table__align-right report-table__value--expense">
+                        {formatCurrency(transaction.amount, currency)}
+                      </td>
+                      <td>{transaction.note || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
         </div>
-
-        {/* Body */}
-        <div style={{ padding: '16px 20px', maxHeight: '480px', overflowY: 'auto' }}>
-          {isLoading ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>Đang tải...</div>
-          ) : sortedTransactions.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
-              Không có giao dịch
-            </div>
-          ) : (
-            <table className="drilldown-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <th
-                    style={{
-                      textAlign: 'left',
-                      padding: '8px 4px',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Ngày
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'right',
-                      padding: '8px 4px',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Số tiền
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'left',
-                      padding: '8px 4px',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Ghi chú
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedTransactions.map((t) => (
-                  <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 4px', fontSize: '13px', color: '#475569' }}>
-                      {t.date}
-                    </td>
-                    <td
-                      style={{
-                        padding: '10px 4px',
-                        fontSize: '13px',
-                        textAlign: 'right',
-                        color: '#dc2626',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {formatCurrency(t.amount)}
-                    </td>
-                    <td style={{ padding: '10px 4px', fontSize: '13px', color: '#64748b' }}>
-                      {t.note || '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </div>
+      </section>
+    </dialog>
   )
 }

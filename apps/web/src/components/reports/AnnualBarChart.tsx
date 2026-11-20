@@ -12,10 +12,11 @@ const fmt = (v: number) => {
 }
 
 interface Props {
+  currency?: string
   data: AnnualSummaryItem[]
 }
 
-export default function AnnualBarChart({ data }: Props) {
+export default function AnnualBarChart({ data, currency }: Props) {
   if (data.length === 0) {
     return (
       <div
@@ -69,7 +70,7 @@ export default function AnnualBarChart({ data }: Props) {
       tooltip: {
         callbacks: {
           label: (ctx: { dataset: { label?: string }; raw: unknown }) =>
-            `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number)}`,
+            `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number, currency)}`,
           title: (items: { dataIndex: number }[]) =>
             `Tháng ${data[items[0].dataIndex].month.split('-')[1]}`,
         },

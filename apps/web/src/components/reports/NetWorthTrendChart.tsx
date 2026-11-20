@@ -4,10 +4,11 @@ import type { NetWorthHistoryPoint } from '@pf/shared'
 import { formatCurrency } from '../../utils/format'
 
 interface Props {
+  currency?: string
   data: NetWorthHistoryPoint[]
 }
 
-export default function NetWorthTrendChart({ data }: Props) {
+export default function NetWorthTrendChart({ data, currency }: Props) {
   if (data.length === 0) {
     return (
       <div
@@ -50,7 +51,7 @@ export default function NetWorthTrendChart({ data }: Props) {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx: { raw: unknown }) => formatCurrency(ctx.raw as number),
+          label: (ctx: { raw: unknown }) => formatCurrency(ctx.raw as number, currency),
         },
       },
     },
@@ -64,7 +65,7 @@ export default function NetWorthTrendChart({ data }: Props) {
         ticks: {
           font: { size: 11 },
           color: '#94a3b8',
-          callback: (value: unknown) => formatCurrency(value as number),
+          callback: (value: unknown) => formatCurrency(value as number, currency),
         },
       },
     },

@@ -304,7 +304,7 @@ function getBudgetComparisonForRange(profileId: string, { startDate, endDate }: 
   // Get budgets for this month
   const budgetRows = db
     .select({
-      budgetId: budgets.id,
+      totalLimit: budgets.totalLimit,
       categoryId: categoryBudgets.categoryId,
       categoryName: categories.name,
       categoryIcon: categories.icon,
@@ -324,7 +324,7 @@ function getBudgetComparisonForRange(profileId: string, { startDate, endDate }: 
   const result: BudgetComparisonItem[] = []
 
   for (const b of budgetRows) {
-    if (!b.categoryId || !b.limitAmount) continue // Skip invalid budget entries
+    if (!b.categoryId || b.limitAmount === null) continue
 
     const actual = expenseMap.get(b.categoryId)
     const actualAmount = actual?.totalAmount ?? 0
@@ -340,6 +340,18 @@ function getBudgetComparisonForRange(profileId: string, { startDate, endDate }: 
     })
   }
 
+  if (result.length === 0 && budgetRows.length > 0) {
+    const budgetAmount = budgetRows[0].totalLimit
+    const actualAmount = expenses.reduce((sum, expense) => sum + expense.totalAmount, 0)
+    return [{
+      categoryId: null,
+      categoryName: 'Tổng ngân sách',
+      categoryIcon: null,
+      budgetAmount,
+      actualAmount,
+      percentage: budgetAmount > 0 ? Math.round(actualAmount / budgetAmount * 100) : 0,
+    }]
+  }
   return result.sort((a, b) => b.budgetAmount - a.budgetAmount)
 }
 
@@ -388,7 +400,7 @@ export function getTopExpenses(authUserId: string, startDate: string, endDate: s
       },
     })
     .from(transactions)
-    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .leftJoin(categories, and(eq(transactions.categoryId, categories.id), eq(categories.userId, profileId)))
     .where(
       and(
         eq(transactions.userId, profileId),
@@ -397,7 +409,7 @@ export function getTopExpenses(authUserId: string, startDate: string, endDate: s
         lte(transactions.date, endDate)
       )
     )
-    .orderBy(desc(transactions.amount))
+    .orderBy(desc(transactions.amount), desc(transactions.date), transactions.id)
     .limit(limit)
     .all()
 }
@@ -419,7 +431,7 @@ export function getReportInsights(authUserId: string, startDate: string, endDate
       title: 'Tỷ lệ tiết kiệm',
       description: averageRate === null
         ? 'Tỷ lệ tiết kiệm trong kỳ đã chọn.'
-        : `Tỷ lệ tiết kiệm trung bình trong 6 tháng đến cuối kỳ là ${averageRate.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%.`,
+        : `Tỷ lệ tiết kiệm trung bình của ${monthlyRates.length} tháng có thu nhập trong 6 tháng gần nhất là ${averageRate.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%.`,
       amount: current.difference,
       percentage: savingsRate,
     })
@@ -433,10 +445,10 @@ export function getReportInsights(authUserId: string, startDate: string, endDate
       insights.push({
         kind: 'budget',
         title: overBudget ? 'Vượt ngân sách' : 'Tiến độ ngân sách',
-        description: `Chi tiêu trong kỳ cho ${budget.categoryName} ${overBudget ? 'đã vượt' : 'đang trong'} hạn mức tháng.`,
+        description: `Chi tiêu trong kỳ${budget.categoryId ? ` cho ${budget.categoryName}` : ''} ${overBudget ? 'đã vượt' : 'đang trong'} hạn mức tháng.`,
         amount: budget.actualAmount,
         percentage: budget.percentage,
-        categoryId: budget.categoryId,
+        categoryId: budget.categoryId ?? undefined,
       })
     }
   }
@@ -487,7 +499,7 @@ export function getTransactionsByCategory(authUserId: string, categoryId: string
       },
     })
     .from(transactions)
-    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .leftJoin(categories, and(eq(transactions.categoryId, categories.id), eq(categories.userId, profileId)))
     .where(
       and(
         eq(transactions.userId, profileId),
@@ -577,10 +589,17 @@ export function exportReportCsv(
     }
     case 'trend': {
       const rows = getIncomeExpenseTrendRange(authUserId, startDate, endDate)
+      const topExpenses = getTopExpenses(authUserId, startDate, endDate, 10)
       return formatCsv(
-        ['month', 'total_income_cents', 'total_expense_cents', 'average_expense_cents', 'savings_rate_percent'],
-        rows.map(({ month, totalIncome, totalExpense, averageExpense, savingsRate }) =>
-          [month, totalIncome, totalExpense, averageExpense, savingsRate]),
+        ['row_type', 'month', 'total_income_cents', 'total_expense_cents', 'average_expense_cents',
+          'savings_rate_percent', 'rank', 'date', 'amount_cents', 'note', 'category'],
+        [
+          ...rows.map(({ month, totalIncome, totalExpense, averageExpense, savingsRate }) =>
+            ['month', month, totalIncome, totalExpense, averageExpense, savingsRate, null, null, null, null, null]),
+          ...topExpenses.map((expense, index) =>
+            ['top_expense', null, null, null, null, null, index + 1, expense.date, expense.amount,
+              expense.note, expense.category?.name ?? 'Không danh mục']),
+        ],
       )
     }
     case 'budget': {

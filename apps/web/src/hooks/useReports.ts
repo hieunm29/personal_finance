@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { authClient } from '../lib/auth-client'
 import { apiClient } from '../services/apiClient'
 import type {
   AnnualSummary,
@@ -13,6 +14,7 @@ import type {
   ReportTabId,
   Transaction,
   TrendDataPoint,
+  UserProfile,
 } from '@pf/shared'
 
 type ExportReportParams = {
@@ -22,35 +24,74 @@ type ExportReportParams = {
   assetHistoryPeriod: '6' | '12' | 'all'
 }
 
-export function useReportOverview(startDate: string, endDate: string, enabled = true) {
+const reportFreshness = {
+  staleTime: 0,
+  refetchOnMount: 'always',
+  refetchOnWindowFocus: 'always',
+} as const
+
+function useReportUserId() {
+  const session = authClient.useSession()
+  return !session.isPending && !session.isRefetching && !session.error ? session.data?.user.id : undefined
+}
+
+function useReportQuery<T>(path: string, enabled = true) {
+  const userId = useReportUserId()
   return useQuery({
-    enabled,
-    queryKey: ['reports', 'overview', startDate, endDate],
-    queryFn: ({ signal }) => {
-      const query = new URLSearchParams({ startDate, endDate })
-      return apiClient<{ data: ReportPeriodOverview }>(`/reports/overview?${query}`, { signal }).then(res => res.data)
+    ...reportFreshness,
+    queryKey: ['reports', userId, path],
+    enabled: Boolean(userId) && enabled,
+    queryFn: async ({ signal }) => {
+      if (!userId) throw new Error('Chưa xác định tài khoản.')
+      const { data } = await apiClient<{ data: T }>(path, {
+        signal, cache: 'no-store', headers: { 'X-Report-Account': userId },
+      })
+      return data
     },
   })
+}
+
+export function useReportProfile() {
+  const userId = useReportUserId()
+  return useQuery({
+    ...reportFreshness,
+    queryKey: ['reports', userId, 'profile'],
+    enabled: Boolean(userId),
+    queryFn: async ({ signal }) => {
+      const { data } = await apiClient<{ data: UserProfile }>('/settings/profile', { signal, cache: 'no-store' })
+      if (data.authUserId !== userId) throw new Error('Tài khoản đã thay đổi.')
+      return data
+    },
+  })
+}
+
+function reportPath(route: string, params: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) query.set(key, String(value))
+  }
+  return query.size ? `/reports/${route}?${query}` : `/reports/${route}`
+}
+
+export function useReportOverview(startDate: string, endDate: string, enabled = true) {
+  return useReportQuery<ReportPeriodOverview>(reportPath('overview', { startDate, endDate }), enabled)
 }
 
 export function useReportInsights(startDate: string, endDate: string, enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'insights', startDate, endDate],
-    queryFn: ({ signal }) => {
-      const query = new URLSearchParams({ startDate, endDate })
-      return apiClient<{ data: ReportInsight[] }>(`/reports/insights?${query}`, { signal }).then(res => res.data)
-    },
-  })
+  return useReportQuery<ReportInsight[]>(reportPath('insights', { startDate, endDate }), enabled)
 }
 
 export function useExportReport() {
+  const userId = useReportUserId()
   return useMutation({
     mutationFn: async (params: ExportReportParams) => {
+      if (!userId) throw new Error('Chưa xác định tài khoản.')
       const { tab, startDate, endDate } = params
       const query = new URLSearchParams(params)
       const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-      const response = await fetch(`${base}/api/reports/export?${query}`, { credentials: 'include' })
+      const response = await fetch(`${base}/api/reports/export?${query}`, {
+        credentials: 'include', headers: { 'X-Report-Account': userId }, cache: 'no-store',
+      })
 
       if (response.status === 401) {
         window.location.href = '/login'
@@ -70,116 +111,38 @@ export function useExportReport() {
   })
 }
 
-// US-RPT-01: Monthly Overview
 export function useMonthlyOverview(year: number, month: number) {
-  return useQuery({
-    queryKey: ['reports', 'overview', year, month],
-    queryFn: () =>
-      apiClient<{ data: { overview: MonthlyOverview; comparison: MonthComparison } }>(
-        `/reports/overview?year=${year}&month=${month}`,
-      ).then(res => res.data),
-  })
+  return useReportQuery<{ overview: MonthlyOverview; comparison: MonthComparison }>(reportPath('overview', { year, month }))
 }
 
-// US-RPT-02: Expenses by Category
 export function useExpensesByCategory(startDate?: string, endDate?: string, enabled = true) {
-  const params = new URLSearchParams()
-  if (startDate) params.set('startDate', startDate)
-  if (endDate) params.set('endDate', endDate)
-  const query = params.toString() ? `?${params.toString()}` : ''
-
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'categories', startDate, endDate],
-    queryFn: () =>
-      apiClient<{ data: CategoryExpense[] }>(`/reports/categories${query}`).then(res => res.data),
-  })
+  return useReportQuery<CategoryExpense[]>(reportPath('categories', { startDate, endDate }), enabled)
 }
 
-// US-RPT-02b: Transactions by Category (drill-down)
 export function useTransactionsByCategory(categoryId: string, startDate?: string, endDate?: string) {
-  const params = new URLSearchParams()
-  if (startDate) params.set('startDate', startDate)
-  if (endDate) params.set('endDate', endDate)
-  const query = params.toString() ? `?${params.toString()}` : ''
-
-  return useQuery({
-    queryKey: ['reports', 'categoryTransactions', categoryId, startDate, endDate],
-    queryFn: () =>
-      apiClient<{ data: unknown[] }>(`/reports/categories/${categoryId}/transactions${query}`).then(res => res.data),
-  })
+  return useReportQuery<Transaction[]>(reportPath(`categories/${encodeURIComponent(categoryId)}/transactions`, { startDate, endDate }))
 }
 
-// US-RPT-03: Income/Expense Trend
 export function useIncomeExpenseTrend(months?: number, startDate?: string, endDate?: string, enabled = true) {
-  const params = new URLSearchParams()
-  if (months) params.set('months', String(months))
-  if (startDate) params.set('startDate', startDate)
-  if (endDate) params.set('endDate', endDate)
-  const query = params.toString() ? `?${params.toString()}` : ''
-
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'trend', months, startDate, endDate],
-    queryFn: () =>
-      apiClient<{ data: TrendDataPoint[] }>(`/reports/trend${query}`).then(res => res.data),
-  })
+  return useReportQuery<TrendDataPoint[]>(reportPath('trend', { months, startDate, endDate }), enabled)
 }
 
-// US-RPT-04: Budget vs Actual
 export function useBudgetVsActual(year: number, month: number, enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'budgetComparison', year, month],
-    queryFn: () =>
-      apiClient<{ data: BudgetComparisonItem[] }>(
-        `/reports/budget-comparison?year=${year}&month=${month}`,
-      ).then(res => res.data),
-  })
+  return useReportQuery<BudgetComparisonItem[]>(reportPath('budget-comparison', { year, month }), enabled)
 }
 
-// US-RPT-05: Net Worth History
 export function useNetWorthHistory(limit?: number, enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'networthHistory', limit],
-    queryFn: () => {
-      const query = limit ? `?limit=${limit}` : ''
-      return apiClient<{ data: NetWorthHistoryPoint[] }>(`/reports/networth-history${query}`).then(res => res.data)
-    },
-  })
+  return useReportQuery<NetWorthHistoryPoint[]>(reportPath('networth-history', { limit }), enabled)
 }
 
-// US-RPT-06: Asset Allocation
 export function useAssetAllocation(enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'assetAllocation'],
-    queryFn: () =>
-      apiClient<{ data: AssetAllocationItem[] }>('/reports/asset-allocation').then(res => res.data),
-  })
+  return useReportQuery<AssetAllocationItem[]>('/reports/asset-allocation', enabled)
 }
 
-// US-RPT-07: Top Expenses
 export function useTopExpenses(startDate?: string, endDate?: string, limit = 10, enabled = true) {
-  const params = new URLSearchParams({ limit: String(limit) })
-  if (startDate) params.set('startDate', startDate)
-  if (endDate) params.set('endDate', endDate)
-
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'topExpenses', startDate, endDate, limit],
-    queryFn: () =>
-      apiClient<{ data: Transaction[] }>(`/reports/top-expenses?${params.toString()}`).then(res => res.data),
-  })
+  return useReportQuery<Transaction[]>(reportPath('top-expenses', { startDate, endDate, limit }), enabled)
 }
 
-// US-RPT-08: Annual Summary
 export function useAnnualSummary(year: number, enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ['reports', 'annual', year],
-    queryFn: () =>
-      apiClient<{ data: AnnualSummary }>(`/reports/annual?year=${year}`).then(res => res.data),
-  })
+  return useReportQuery<AnnualSummary>(reportPath('annual', { year }), enabled)
 }

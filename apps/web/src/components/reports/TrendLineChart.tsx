@@ -12,10 +12,11 @@ const fmt = (v: number) => {
 }
 
 interface Props {
+  currency?: string
   data: TrendDataPoint[]
 }
 
-export default function TrendLineChart({ data }: Props) {
+export default function TrendLineChart({ data, currency }: Props) {
   if (data.length === 0) {
     return (
       <div
@@ -86,7 +87,7 @@ export default function TrendLineChart({ data }: Props) {
       tooltip: {
         callbacks: {
           label: (ctx: { dataset: { label?: string }; raw: unknown }) =>
-            `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number)}`,
+            `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number, currency)}`,
         },
       },
     },

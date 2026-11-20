@@ -10,10 +10,11 @@ const DEFAULT_COLORS = [
 ]
 
 interface Props {
+  currency?: string
   data: CategoryExpense[]
 }
 
-export default function CategoryPieChart({ data }: Props) {
+export default function CategoryPieChart({ data, currency }: Props) {
   if (data.length === 0) {
     return (
       <div
@@ -62,7 +63,7 @@ export default function CategoryPieChart({ data }: Props) {
             const total = (ctx.dataset.data as number[]).reduce((a, b) => a + b, 0)
             const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
             const item = data[ctx.dataIndex]
-            return `${item.categoryName}: ${formatCurrency(value)} (${percentage}%)`
+            return `${item.categoryName}: ${formatCurrency(value, currency)} (${percentage}%)`
           },
         },
       },
