@@ -236,6 +236,12 @@ export const aiUserFacts = sqliteTable('ai_user_facts', {
 })
 
 /** Chống xử lý trùng khi Zalo gửi lại cùng một webhook. */
+/** Job hằng ngày (sao lưu, thông báo…) đã chạy cho ngày nào — để khởi động lại không chạy lại hay bỏ sót. */
+export const jobRuns = sqliteTable('job_runs', {
+  name: text('name').primaryKey(),
+  lastKey: text('last_key').notNull(), // YYYY-MM-DD (giờ VN)
+})
+
 export const zaloProcessedMessages = sqliteTable('zalo_processed_messages', {
   messageId: text('message_id').primaryKey(),
   createdAt: createdAt(),

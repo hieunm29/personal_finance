@@ -1,6 +1,6 @@
 import { betaTool } from '@anthropic-ai/sdk/helpers/beta/json-schema'
 import { getAssetOverview } from '../../services/assetService'
-import { getBudgetProgress } from '../../services/budgetService'
+import { getBudgetProgress, getSafeToSpend } from '../../services/budgetService'
 import { getExpensesByCategory, getMonthRange, getMonthlyOverview } from '../../services/reportService'
 import { centsToVnd, currentMonthVN, json, toolFail } from './helpers'
 import type { ToolContext } from './index'
@@ -48,7 +48,7 @@ export function buildReportTools(ctx: ToolContext) {
 
   const budgetStatusTool = betaTool({
     name: 'get_budget_status',
-    description: 'Tình trạng ngân sách của một tháng: hạn mức, đã chi, còn lại theo từng danh mục. Dùng cho "còn bao nhiêu ngân sách".',
+    description: 'Tình trạng ngân sách của một tháng: hạn mức, đã chi, còn lại theo từng danh mục. Với tháng hiện tại còn có số có thể tiêu mỗi ngày đến hết tháng (đã trừ hóa đơn định kỳ chưa ghi). Dùng cho "còn bao nhiêu ngân sách", "hôm nay tiêu được bao nhiêu".',
     inputSchema: {
       type: 'object',
       properties: { month: { type: 'string', pattern: MONTH_PATTERN, description: 'YYYY-MM; bỏ trống = tháng hiện tại' } },
@@ -58,9 +58,13 @@ export function buildReportTools(ctx: ToolContext) {
       const { month } = parseMonth(input.month)
       const budget = getBudgetProgress(ctx.authUserId, month)
       if (!budget) return json({ month, hasBudget: false })
+      const safe = month === currentMonthVN() ? getSafeToSpend(ctx.authUserId) : null
       return json({
         month,
         hasBudget: true,
+        safeToSpendPerDayVnd: safe ? centsToVnd(safe.perDay) : null,
+        upcomingBillsVnd: safe ? centsToVnd(safe.upcomingBills) : null,
+        daysLeftIncludingToday: safe?.daysLeft ?? null,
         totalLimitVnd: centsToVnd(budget.totalLimit),
         totalSpentVnd: centsToVnd(budget.totalSpent),
         remainingVnd: centsToVnd(budget.remaining),

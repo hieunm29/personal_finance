@@ -88,7 +88,7 @@ export function useExportReport() {
       if (!userId) throw new Error('Chưa xác định tài khoản.')
       const { tab, startDate, endDate } = params
       const query = new URLSearchParams(params)
-      const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      const base = import.meta.env.VITE_API_URL || window.location.origin
       const response = await fetch(`${base}/api/reports/export?${query}`, {
         credentials: 'include', headers: { 'X-Report-Account': userId }, cache: 'no-store',
       })

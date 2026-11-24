@@ -93,7 +93,7 @@ export default function DashboardPage() {
             <NetWorthOverview netWorth={netWorthRes?.data} history={historyRes?.data} currency={currency} loading={assetsLoading} />
             <FinancialHealthCard dashboard={dashboard} budget={budgetRes?.data} month={month} currency={currency} />
           </section>
-          <DashboardKpis dashboard={dashboard} budget={budgetRes?.data} month={month} currency={currency} />
+          <DashboardKpis dashboard={dashboard} month={month} currency={currency} />
           <section className="db-row db-row-chart" aria-label="Biểu đồ tài chính">
             <MonthlyChart data={dashboard.monthlyChart} currency={currency} />
             <TopExpenseCategoriesList categories={dashboard.topExpenseCategories} currency={currency} month={month} totalExpense={dashboard.totalExpense} />

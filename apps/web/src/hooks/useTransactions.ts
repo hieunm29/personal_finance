@@ -68,7 +68,7 @@ export function useTransactionAnalytics(filters: TransactionFilter) {
 export function useExportTransactions() {
   return useMutation({
     mutationFn: async (filters: TransactionFilter) => {
-      const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      const base = import.meta.env.VITE_API_URL || window.location.origin
       const response = await fetch(`${base}/api/transactions/export?${buildParams(filters)}`, {
         credentials: 'include',
       })

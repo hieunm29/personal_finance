@@ -382,6 +382,14 @@ export interface BudgetProgressItem {
   spent: number
 }
 
+/** "Hôm nay được tiêu bao nhiêu" — xem getSafeToSpend ở budgetService. Tất cả là cents. */
+export interface SafeToSpend {
+  perDay: number // đã trừ hóa đơn định kỳ chưa ghi, không bao giờ âm
+  remaining: number // ngân sách còn lại của tháng (có thể âm nếu vượt)
+  upcomingBills: number // tổng chi định kỳ chưa ghi trong tháng
+  daysLeft: number // số ngày còn lại, tính cả hôm nay
+}
+
 export interface DashboardData {
   totalIncome: number
   totalExpense: number
@@ -394,6 +402,8 @@ export interface DashboardData {
   topExpenseCategories: TopExpenseCategory[]
   monthlyChart: MonthlyChartPoint[]
   budgetProgress: BudgetProgressItem[] | null
+  /** Chỉ có cho tháng hiện tại (giờ VN) và khi tháng đó có ngân sách; ngược lại null. */
+  safeToSpend: SafeToSpend | null
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -8,11 +8,24 @@ import { buildTools, type ToolCallRecord } from './tools'
 import { todayVN } from './tools/helpers'
 import { getProfileIdByAuthUser, getUserFinanceContext } from './userContext'
 
+export interface AgentImage {
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+  base64: string
+}
+
 export interface AgentInput {
   authUserId: string
   text: string
   channel?: string
+  /**
+   * Ảnh người dùng gửi kèm (hóa đơn, ảnh chuyển khoản). Lượt có ảnh chỉ được ĐỀ XUẤT: tool ghi bị
+   * bỏ khỏi request, người dùng trả lời "ok" ở lượt sau thì mới ghi. Ảnh không được lưu vào lịch sử.
+   */
+  image?: AgentImage
 }
+
+/** Thay cho ảnh khi lưu lịch sử chat (chỉ lưu chữ). */
+const IMAGE_TURN_MARK = '[Ảnh gửi kèm]'
 
 /**
  * Trái tim của trợ lý: nhận 1 tin nhắn, trả về 1 câu trả lời.
@@ -27,7 +40,7 @@ export interface AgentInput {
  *
  * Hàm này KHÔNG biết gì về Zalo → có thể dùng lại cho Telegram, web chat, CLI test.
  */
-export async function runAgent({ authUserId, text, channel = 'zalo' }: AgentInput): Promise<string> {
+export async function runAgent({ authUserId, text, channel = 'zalo', image }: AgentInput): Promise<string> {
   if (!aiConfig.enabled) return 'Trợ lý AI đang tạm tắt.'
 
   const profileId = getProfileIdByAuthUser(authUserId)
@@ -44,9 +57,16 @@ export async function runAgent({ authUserId, text, channel = 'zalo' }: AgentInpu
     },
   ]
 
+  const proposalOnly = Boolean(image)
+  const userContent: Anthropic.Beta.BetaMessageParam['content'] = image
+    ? [
+        { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } },
+        { type: 'text', text: withDateHeader(text || 'Ảnh giao dịch', todayVN()) },
+      ]
+    : withDateHeader(text, todayVN())
   const messages: Anthropic.Beta.BetaMessageParam[] = [
     ...loadHistory(profileId, aiConfig.historyLimit),
-    { role: 'user', content: withDateHeader(text, todayVN()) },
+    { role: 'user', content: userContent },
   ]
 
   // Nhật ký tool THỰC SỰ chạy trong lượt này — nguồn sự thật để kiểm tra lời model.
@@ -58,7 +78,7 @@ export async function runAgent({ authUserId, text, channel = 'zalo' }: AgentInpu
       max_iterations: aiConfig.maxIterations,
       system,
       messages: conversation,
-      tools: buildTools({ authUserId, callLog }),
+      tools: buildTools({ authUserId, callLog, readOnly: proposalOnly }),
       ...(aiConfig.anthropicExtras
         ? {
             output_config: { effort: aiConfig.effort },
@@ -78,7 +98,7 @@ export async function runAgent({ authUserId, text, channel = 'zalo' }: AgentInpu
     reply = stripActionNotes(extractReply(await callModel(messages)))
 
     // Guard: câu trả lời có khớp với những gì tool thật sự đã làm không? Nếu không → cho làm lại 1 lần.
-    const verdict = checkReply(reply, callLog)
+    const verdict = checkReply(reply, callLog, { proposalOnly })
     if (verdict.action === 'retry') {
       console.warn('[ai] guard retry:', verdict.nudge.slice(0, 60), '| reply:', reply.slice(0, 80))
       reply = stripActionNotes(extractReply(await callModel([
@@ -97,7 +117,8 @@ export async function runAgent({ authUserId, text, channel = 'zalo' }: AgentInpu
   }
 
   // Lưu kèm ghi chú hành động thật để lần sau model thấy "nói đã ghi" luôn đi cùng "gọi tool".
-  saveTurn(profileId, text, `${reply}\n${buildActionNote(callLog)}`, channel)
+  const savedText = image ? `${IMAGE_TURN_MARK}${text ? ` ${text}` : ''}` : text
+  saveTurn(profileId, savedText, `${reply}\n${buildActionNote(callLog)}`, channel)
   return reply
 }
 

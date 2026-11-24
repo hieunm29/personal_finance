@@ -2,9 +2,20 @@
 
 ## Trọng tâm Công việc Hiện tại
 **Giai đoạn:** Phase 1 MVP — Budget Planner (US-BUD-01→07) vừa hoàn thành + Dashboard budget integration bug fix.
-**Tiếp theo:** US-TXN-08 Recurring hoặc Phase 2 features.
+**Tiếp theo:** hoàn tất Đợt 1 "dùng được mỗi ngày" — xem mục 2026-11-21 ngay bên dưới.
 
 ---
+
+## Các Thay đổi Gần đây (2026-11-21) — Đợt 1 "dùng được mỗi ngày" (chưa commit)
+- **Bối cảnh:** đánh giá cho thấy phần ghi chép/phân tích đã đủ, thiếu vòng thói quen hằng ngày. Đợt 1: bot chạy 24/7 + sao lưu, "hôm nay được tiêu bao nhiêu", bot đọc ảnh, nhắc chủ động qua Zalo.
+- **Đã làm:** ảnh bill (đề xuất rồi mới ghi), `getSafeToSpend` + badge Dashboard, hạ tầng deploy (entrypoint, Caddy, compose), scheduler `jobs/` + sao lưu R2, script `zalo:send-test`. Chi tiết và trạng thái từng việc: `progress.md`.
+- **Quyết định:**
+  - Lượt có ảnh bỏ hẳn tool ghi khỏi request (an toàn bằng cấu trúc, không bằng prompt); guard có chế độ `proposalOnly`.
+  - `getSafeToSpend` đếm hóa đơn định kỳ **từ đầu tháng**, chỉ lần chưa sinh giao dịch (> `lastGeneratedDate`) → không trừ hai lần; số ngày còn lại tính cả hôm nay.
+  - Sao lưu chỉ bật ở production; upload R2 lỗi thì lần sau chỉ upload lại bản đã có, không chụp lại.
+  - Thông báo chủ động (Bước 4) **tạm dừng** chờ kết quả `zalo:send-test` vì tài liệu Zalo không nói gì về giới hạn gửi chủ động.
+  - Migration job_runs là `0006` (kế hoạch ban đầu dành 0006 cho thông báo → thông báo sẽ là 0007).
+- **Còn dang dở:** chưa deploy thật; chưa thử ảnh thật từ Zalo; chưa thử upload R2 thật; Bước 4 (thông báo chủ động) chờ kết quả `zalo:send-test`.
 
 ## Các Thay đổi Gần đây (2026-11-20) — Chuyển khoản & tiền mặt có số dư
 - Chuyển tiền giữa tài khoản (rút ATM, nộp tiền, chuyển ngân hàng): `POST /api/transactions/transfer`, nút "⇄ Chuyển khoản" trong form, tool bot `create_transfer` (hoàn tác được). Thiết kế: `doc/8.transfer_design.md`.

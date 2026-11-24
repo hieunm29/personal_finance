@@ -152,6 +152,42 @@ function occurrenceAt(startDate: string, interval: string, index: number): strin
   return formatDate(start)
 }
 
+export interface UpcomingOccurrence {
+  templateId: string
+  date: string
+  type: string
+  amount: number
+  categoryId: string
+  note: string | null
+}
+
+/**
+ * Các lần đến hạn của template đang bật trong [fromDate, toDate] mà CHƯA được sinh thành giao dịch
+ * (lần ≤ lastGeneratedDate đã nằm trong sổ giao dịch nên bị bỏ qua, tránh đếm hai lần).
+ * Tôn trọng endDate. Kết quả sắp theo ngày.
+ */
+export function listUpcomingOccurrences(authUserId: string, fromDate: string, toDate: string): UpcomingOccurrence[] {
+  const profileId = profileIdFor(authUserId)
+  const templates = db.select().from(recurringTemplates)
+    .where(and(eq(recurringTemplates.userId, profileId), eq(recurringTemplates.isActive, true))).all()
+  const result: UpcomingOccurrence[] = []
+  for (const template of templates) {
+    let index = 0
+    let occurrence = occurrenceAt(template.startDate, template.interval, index)
+    while (occurrence <= toDate && (!template.endDate || occurrence <= template.endDate) && index < 10_000) {
+      if (occurrence >= fromDate && (!template.lastGeneratedDate || occurrence > template.lastGeneratedDate)) {
+        result.push({
+          templateId: template.id, date: occurrence, type: template.type, amount: template.amount,
+          categoryId: template.categoryId, note: template.note,
+        })
+      }
+      index += 1
+      occurrence = occurrenceAt(template.startDate, template.interval, index)
+    }
+  }
+  return result.sort((a, b) => a.date.localeCompare(b.date))
+}
+
 export function generateDueTransactions(authUserId: string, today = new Date().toLocaleDateString('sv')) {
   const profileId = profileIdFor(authUserId)
   const createdIds: string[] = []

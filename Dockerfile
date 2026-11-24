@@ -35,9 +35,13 @@ COPY apps/server apps/server
 COPY packages/shared packages/shared
 COPY --from=build /app/apps/web/dist apps/web/dist
 
-RUN mkdir -p data
+# tzdata để TZ=Asia/Ho_Chi_Minh có hiệu lực (nhiều chỗ tính "hôm nay" theo giờ máy)
+RUN apk add --no-cache tzdata && mkdir -p data backups
+
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD ["bun", "run", "apps/server/src/index.ts"]
+# Chạy migration trước, rồi mới khởi động server (xem docker-entrypoint.sh)
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]

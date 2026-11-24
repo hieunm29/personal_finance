@@ -1,16 +1,46 @@
+# Production: app + Caddy (tự cấp HTTPS). Hướng dẫn: doc/deploy-oracle.md
+# Cần file .env cạnh file này (mẫu: .env.example, phần "Production").
 services:
   app:
     build: .
-    ports:
-      - "3000:3000"
+    restart: unless-stopped
+    env_file: .env
     environment:
+      # `environment` ghi đè `env_file`, nên .env copy từ mẫu dev vẫn chạy đúng production
       - DATABASE_URL=file:./data/app.db
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      - BETTER_AUTH_URL=http://localhost:3000
       - NODE_ENV=production
       - PORT=3000
+      - TZ=Asia/Ho_Chi_Minh
+    expose:
+      - "3000"
     volumes:
       - db-data:/app/data
+      - backups:/app/backups
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - APP_DOMAIN=${APP_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
 
 volumes:
   db-data:
+  backups:
+  caddy-data:
+  caddy-config:

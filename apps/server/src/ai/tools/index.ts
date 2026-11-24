@@ -2,6 +2,7 @@ import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableT
 import { buildMemoryTools } from './memoryTools'
 import { buildReportTools } from './reportTools'
 import { buildTransactionTools } from './transactionTools'
+import { WRITE_TOOL_NAMES } from '../toolNames'
 
 /** Một lần tool THỰC SỰ chạy trong lượt hiện tại (do code ghi lại, không phải lời model nói). */
 export interface ToolCallRecord {
@@ -19,6 +20,11 @@ export interface ToolContext {
   authUserId: string
   /** Nếu có, mỗi lần tool chạy xong (thành công hoặc lỗi) sẽ được ghi vào đây. */
   callLog?: ToolCallRecord[]
+  /**
+   * Chỉ giữ tool ĐỌC. Dùng cho lượt chỉ-đề-xuất (tin có ảnh): bỏ hẳn tool ghi khỏi request nên
+   * model không thể ghi trước khi người dùng xác nhận, chứ không chỉ dựa vào lời dặn trong prompt.
+   */
+  readOnly?: boolean
 }
 
 function extractRefId(result: unknown): string | undefined {
@@ -61,5 +67,6 @@ function withCallLog<T extends BetaRunnableTool<any>>(tool: T, log: ToolCallReco
  * Thứ tự tool phải cố định, vì đổi thứ tự cũng làm hỏng cache.
  */
 export function buildTools(ctx: ToolContext) {
-  return [...buildTransactionTools(ctx), ...buildReportTools(ctx), ...buildMemoryTools(ctx)].map((tool) => withCallLog(tool, ctx.callLog))
+  const tools = [...buildTransactionTools(ctx), ...buildReportTools(ctx), ...buildMemoryTools(ctx)].map((tool) => withCallLog(tool, ctx.callLog))
+  return ctx.readOnly ? tools.filter((tool) => !WRITE_TOOL_NAMES.has(tool.name)) : tools
 }

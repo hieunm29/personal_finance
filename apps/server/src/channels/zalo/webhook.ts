@@ -6,7 +6,12 @@ import { runAgent as defaultRunAgent } from '../../ai/agent'
 import { clearHistory } from '../../ai/memory'
 import { getProfileIdByAuthUser } from '../../ai/userContext'
 import { consumeLinkCode, findAuthUserByZaloId, unlinkByZaloId } from './linking'
-import { sendMessage as defaultSendMessage, sendTyping as defaultSendTyping } from './zaloClient'
+import {
+  downloadImage as defaultDownloadImage,
+  sendMessage as defaultSendMessage,
+  sendTyping as defaultSendTyping,
+  type DownloadedImage,
+} from './zaloClient'
 
 /** Payload Zalo gửi tới webhook (chỉ các trường ta dùng). */
 interface ZaloUpdate {
@@ -14,13 +19,19 @@ interface ZaloUpdate {
   message?: {
     message_id?: string
     text?: string
+    /** `message.image.received`: link ảnh (tài liệu chính thức) và chú thích người dùng gõ kèm. */
+    photo_url?: string
+    /** Bản mirror của tài liệu ghi tên trường là `photo`; nhận cả hai cho chắc. */
+    photo?: string
+    caption?: string
     from?: { id?: string; display_name?: string; is_bot?: boolean }
     chat?: { id?: string; chat_type?: string }
   }
 }
 
 export interface ZaloWebhookDeps {
-  runAgent: (input: { authUserId: string; text: string; channel?: string }) => Promise<string>
+  runAgent: (input: { authUserId: string; text: string; channel?: string; image?: DownloadedImage }) => Promise<string>
+  downloadImage: (url: string) => Promise<DownloadedImage>
   sendMessage: (chatId: string, text: string) => Promise<void>
   sendTyping: (chatId: string) => Promise<void>
   secret: () => string | undefined
@@ -33,6 +44,7 @@ const HELP_TEXT = [
   '• "nhận lương 20 triệu"',
   '• "tháng này tiêu bao nhiêu?"',
   '• "tổng tài sản của tôi"',
+  '• gửi ảnh hóa đơn / ảnh chuyển khoản: mình đọc rồi hỏi bạn xác nhận trước khi ghi',
   '• "hoàn tác" để xóa giao dịch vừa ghi',
   '',
   'Lệnh: /reset xóa trí nhớ hội thoại, /unlink hủy liên kết.',
@@ -62,6 +74,7 @@ function markProcessed(messageId: string): boolean {
 export function createZaloWebhook(overrides: Partial<ZaloWebhookDeps> = {}) {
   const deps: ZaloWebhookDeps = {
     runAgent: defaultRunAgent,
+    downloadImage: defaultDownloadImage,
     sendMessage: defaultSendMessage,
     sendTyping: defaultSendTyping,
     secret: () => process.env.ZALO_WEBHOOK_SECRET,
@@ -113,6 +126,23 @@ export function createZaloWebhook(overrides: Partial<ZaloWebhookDeps> = {}) {
     await deps.sendMessage(chatId, reply)
   }
 
+  /** Ảnh hóa đơn / chuyển khoản: bot đọc rồi ĐỀ XUẤT; chỉ ghi khi người dùng trả lời xác nhận (xem agent.ts). */
+  async function handleImage(zaloUserId: string, chatId: string, photoUrl: string, caption: string | undefined) {
+    const authUserId = findAuthUserByZaloId(zaloUserId)
+    if (!authUserId) return deps.sendMessage(chatId, NOT_LINKED_TEXT) // chưa liên kết thì không tải ảnh
+
+    await deps.sendTyping(chatId)
+    let image: DownloadedImage
+    try {
+      image = await deps.downloadImage(photoUrl)
+    } catch (error) {
+      console.error('[zalo] tải ảnh lỗi:', error instanceof Error ? error.message : error)
+      return deps.sendMessage(chatId, 'Mình không đọc được ảnh này (quá lớn, đã hết hạn hoặc không phải ảnh). Bạn gửi lại ảnh khác, hoặc nhắn số tiền giúp mình nhé.')
+    }
+    const reply = await deps.runAgent({ authUserId, text: caption?.trim() ?? '', channel: 'zalo', image })
+    await deps.sendMessage(chatId, reply)
+  }
+
   const route = new Hono()
 
   route.post('/', async (c) => {
@@ -133,8 +163,11 @@ export function createZaloWebhook(overrides: Partial<ZaloWebhookDeps> = {}) {
     // 3. Xử lý NỀN rồi trả 200 ngay — gọi AI mất vài giây, không để Zalo phải chờ.
     if (update?.event_name === 'message.text.received' && message.text) {
       enqueue(zaloUserId, () => handleText(zaloUserId, chatId, message.from?.display_name, message.text!))
+    } else if (update?.event_name === 'message.image.received' && (message.photo_url ?? message.photo)) {
+      const photoUrl = (message.photo_url ?? message.photo)!
+      enqueue(zaloUserId, () => handleImage(zaloUserId, chatId, photoUrl, message.caption))
     } else {
-      enqueue(zaloUserId, () => deps.sendMessage(chatId, 'Hiện mình chỉ hiểu tin nhắn văn bản thôi 🙏'))
+      enqueue(zaloUserId, () => deps.sendMessage(chatId, 'Hiện mình chỉ hiểu tin nhắn chữ và ảnh thôi 🙏'))
     }
     return c.json({ ok: true })
   })

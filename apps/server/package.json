@@ -11,7 +11,8 @@
     "db:migrate": "bun run src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "ai:chat": "bun run scripts/ai-chat.ts",
-    "zalo:webhook": "bun run scripts/zalo-set-webhook.ts"
+    "zalo:webhook": "bun run scripts/zalo-set-webhook.ts",
+    "zalo:send-test": "bun run scripts/zalo-send-test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",

@@ -212,13 +212,72 @@ async function runChild() {
   const forgotten = JSON.parse(await tool(authA, 'forget_fact').run({ factId: remembered.factId }))
   assert.equal(forgotten.forgotten, 'Cà phê luôn ghi vào ví Momo')
   assert.equal(scripted.length, 0)
+
+  // ─── ảnh: lượt có ảnh chỉ ĐỀ XUẤT (không có tool ghi); lượt "ok" sau đó mới ghi ───
+  const image = { mediaType: 'image/png' as const, base64: 'aGVsbG8=' }
+  const WRITE_NAMES = ['create_transaction', 'create_transfer', 'undo_last_action', 'remember_fact', 'forget_fact']
+  const txCount = () => (sqlite.query('SELECT COUNT(*) AS n FROM transactions').get() as any).n
+  const txBefore = txCount()
+  clearHistory(profileA)
+
+  // Model bịa "Đã ghi" ngay trong lượt ảnh → guard bắt làm lại bằng lời nhắc riêng → vẫn bịa → chặn cứng
+  scripted.push(say('Đã ghi: chi 45.000đ – Ăn uống.'), say('Đã ghi: chi 45.000đ – Ăn uống.'))
+  const lied = await runAgent({ authUserId: authA, text: '', channel: 'cli', image })
+  assert.match(lied, /CHƯA ghi được/)
+  assert.match(JSON.stringify(requests.at(-1).messages), /chỉ được ĐỀ XUẤT/, 'retry must use the proposal-only nudge')
+  assert.equal(txCount(), txBefore, 'an image turn must never write')
+  assert.equal(scripted.length, 0)
+  clearHistory(profileA)
+
+  // Đề xuất hợp lệ: có số tiền nhưng không gọi tool nào → guard KHÔNG bắt làm lại
+  const proposal = '1. Chi 45.000đ – Ăn uống – Tiền mặt (Cà phê)\nTrả lời *ok* để ghi, hoặc nói chỗ cần sửa.'
+  scripted.push(say(proposal))
+  assert.equal(await runAgent({ authUserId: authA, text: '', channel: 'cli', image }), proposal)
+  assert.equal(scripted.length, 0, 'amounts read from an image need no tool, so the guard must not retry')
+  const imageRequest = requests.at(-1)
+  const blocks = imageRequest.messages.at(-1).content
+  assert.equal(blocks[0].type, 'image')
+  assert.deepEqual(blocks[0].source, { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' })
+  assert.match(blocks[1].text, /^\[Hôm nay: \d{4}-\d{2}-\d{2}\]\nẢnh giao dịch$/)
+  const imageToolNames = imageRequest.tools.map((item: any) => item.name)
+  for (const name of WRITE_NAMES) assert(!imageToolNames.includes(name), `${name} must not be offered on an image turn`)
+  assert(imageToolNames.includes('search_transactions'), 'read tools stay available for duplicate checks')
+  assert.equal(txCount(), txBefore)
+  const savedImageTurn = loadHistory(profileA, 2)
+  assert.equal(savedImageTurn[0].content, '[Ảnh gửi kèm]', 'history stores text only, never the image')
+  assert.match(String(savedImageTurn[1].content), /Trả lời \*ok\* để ghi/)
+
+  // Lượt "ok": tool ghi quay lại, ảnh không còn trong request, danh sách đề xuất nằm trong lịch sử
+  scripted.push(
+    callTool('create_transaction', { type: 'expense', amountVnd: 45_000, categoryId: foodA, date: '2026-11-21', note: 'Cà phê' }),
+    say('✅ Đã ghi: chi 45.000đ – Ăn uống – Tiền mặt. Gõ *hoàn tác* nếu sai.'),
+  )
+  assert.match(await runAgent({ authUserId: authA, text: 'ok', channel: 'cli' }), /Đã ghi: chi 45\.000đ/)
+  const confirmRequest = requests.at(-2)
+  assert(confirmRequest.tools.map((item: any) => item.name).includes('create_transaction'), 'write tools return on the confirmation turn')
+  assert.match(JSON.stringify(confirmRequest.messages), /1\. Chi 45\.000đ/, 'the proposal must be in history')
+  assert(!JSON.stringify(confirmRequest.messages).includes('"type":"image"'), 'the image must not be resent')
+  assert.equal(txCount(), txBefore + 1)
+
+  // Ảnh kèm chú thích: chú thích thay cho câu mặc định và được lưu lại
+  scripted.push(say('1. Chi 120.000đ – Ăn uống\nTrả lời *ok* để ghi, hoặc nói chỗ cần sửa.'))
+  await runAgent({ authUserId: authA, text: 'bữa trưa với team', channel: 'cli', image })
+  assert.match(requests.at(-1).messages.at(-1).content[1].text, /bữa trưa với team$/)
+  assert.equal(loadHistory(profileA, 2)[0].content, '[Ảnh gửi kèm] bữa trưa với team')
+  assert.equal(scripted.length, 0)
   mock.stop(true)
 
   // ─── webhook Zalo ───
   const sent: Array<{ chatId: string; text: string }> = []
-  const agentCalls: Array<{ authUserId: string; text: string }> = []
+  const agentCalls: any[] = []
+  const downloads: string[] = []
   const { route, waitIdle } = createZaloWebhook({
     runAgent: async (input) => { agentCalls.push(input); return 'Đã ghi!' },
+    downloadImage: async (url) => {
+      downloads.push(url)
+      if (url.includes('broken')) throw new Error('hết hạn')
+      return { mediaType: 'image/jpeg', base64: 'AAAA' }
+    },
     sendMessage: async (chatId, text) => { sent.push({ chatId, text }) },
     sendTyping: async () => {},
   })
@@ -232,12 +291,26 @@ async function runChild() {
     message: { message_id: id, text, from: { id: 'zalo-user-1', display_name: 'An', is_bot: false }, chat: { id: 'zalo-user-1', chat_type: 'PRIVATE' } },
   })
 
+  const sender = { id: 'zalo-user-1', display_name: 'An', is_bot: false }
+  const chat = { id: 'zalo-user-1', chat_type: 'PRIVATE' }
+  const imageUpdate = (id: string, photoUrl: string, caption?: string) => ({
+    event_name: 'message.image.received',
+    message: { message_id: id, photo_url: photoUrl, caption, from: sender, chat },
+  })
+
   assert.equal((await post(textUpdate('m0', 'hi'), 'wrong')).status, 401)
 
   assert.equal((await post(textUpdate('m1', 'mua cà phê 45k'))).status, 200)
   await waitIdle()
   assert.match(sent.at(-1)!.text, /chưa liên kết/)
   assert.equal(agentCalls.length, 0, 'unlinked users must not reach the AI')
+
+  // Ảnh từ người chưa liên kết: hướng dẫn liên kết, KHÔNG tải ảnh, KHÔNG gọi AI
+  assert.equal((await post(imageUpdate('i0', 'https://cdn.example.test/bill.jpg'))).status, 200)
+  await waitIdle()
+  assert.match(sent.at(-1)!.text, /chưa liên kết/)
+  assert.equal(downloads.length, 0, 'unlinked users must not make the server download images')
+  assert.equal(agentCalls.length, 0)
 
   const { code } = createLinkCode(authA)
   await post(textUpdate('m2', `/link ${code.toLowerCase()}`))
@@ -251,11 +324,43 @@ async function runChild() {
   assert.deepEqual(agentCalls[0], { authUserId: authA, text: 'mua cà phê 45k', channel: 'zalo' })
   assert.equal(sent.at(-1)!.text, 'Đã ghi!')
 
+  // Ảnh từ người đã liên kết: tải ảnh rồi gọi AI kèm ảnh và chú thích
+  await post(imageUpdate('i1', 'https://cdn.example.test/bill.jpg', ' bữa trưa '))
+  await waitIdle()
+  assert.deepEqual(downloads, ['https://cdn.example.test/bill.jpg'])
+  assert.equal(agentCalls.length, 2)
+  assert.deepEqual(agentCalls[1], { authUserId: authA, text: 'bữa trưa', channel: 'zalo', image: { mediaType: 'image/jpeg', base64: 'AAAA' } })
+
+  // Zalo gửi lại cùng ảnh → bỏ qua, không tải lần nữa
+  await post(imageUpdate('i1', 'https://cdn.example.test/bill.jpg', ' bữa trưa '))
+  await waitIdle()
+  assert.equal(downloads.length, 1)
+  assert.equal(agentCalls.length, 2)
+
+  // Tải ảnh lỗi (hết hạn, quá lớn…) → báo người dùng, không gọi AI
+  await post(imageUpdate('i2', 'https://cdn.example.test/broken.jpg'))
+  await waitIdle()
+  assert.match(sent.at(-1)!.text, /không đọc được ảnh/)
+  assert.equal(agentCalls.length, 2)
+
+  // Tài liệu Zalo (bản mirror) ghi tên trường là `photo`: vẫn nhận
+  await post({ event_name: 'message.image.received', message: { message_id: 'i3', photo: 'https://cdn.example.test/alt.jpg', from: sender, chat } })
+  await waitIdle()
+  assert.equal(downloads.at(-1), 'https://cdn.example.test/alt.jpg')
+  assert.equal(agentCalls.length, 3)
+  assert.equal(agentCalls[2].text, '', 'an image without caption sends empty text')
+
+  // Sticker, giọng nói… → chỉ hiểu chữ và ảnh
+  await post({ event_name: 'message.sticker.received', message: { message_id: 'i4', from: sender, chat } })
+  await waitIdle()
+  assert.match(sent.at(-1)!.text, /chỉ hiểu tin nhắn chữ và ảnh/)
+  assert.equal(agentCalls.length, 3)
+
   await post(textUpdate('m4', '/unlink'))
   await waitIdle()
   await post(textUpdate('m5', 'tổng tài sản'))
   await waitIdle()
-  assert.equal(agentCalls.length, 1)
+  assert.equal(agentCalls.length, 3, 'after /unlink nothing reaches the AI')
   assert.match(sent.at(-1)!.text, /chưa liên kết/)
 
   console.log(JSON.stringify({ ok: true }))

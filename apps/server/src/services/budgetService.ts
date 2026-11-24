@@ -2,7 +2,9 @@ import { eq, and, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { budgets, categoryBudgets, categories, categoryGroups, userProfiles, transactions } from '../db/schema'
 import type { CreateBudgetInput, UpdateBudgetInput } from '@pf/shared'
-import type { Budget, BudgetWithProgress, BudgetHistory, BudgetOverview, BudgetOverviewCategory } from '@pf/shared'
+import type { Budget, BudgetWithProgress, BudgetHistory, BudgetOverview, BudgetOverviewCategory, SafeToSpend } from '@pf/shared'
+import { vnClock } from '../lib/vnTime'
+import { listUpcomingOccurrences } from './recurringService'
 
 function getProfileId(authUserId: string): string {
   const profile = db.select({ id: userProfiles.id }).from(userProfiles).where(eq(userProfiles.authUserId, authUserId)).get()
@@ -263,4 +265,26 @@ export function getBudgetSuggestion(authUserId: string, month: string) {
   const categorySuggestions = rows.filter((row) => row.amount > 0).map((row) => ({ categoryId: row.categoryId, limitAmount: round((row.amount ?? 0) / 3 * 1.1) }))
   const total = round(categorySuggestions.reduce((sum, item) => sum + item.limitAmount, 0))
   return { month, totalLimit: total, categories: categorySuggestions, basedOnMonths: 3 }
+}
+
+/**
+ * "Hôm nay được tiêu bao nhiêu": (ngân sách còn lại − hóa đơn định kỳ chưa ghi) ÷ số ngày còn lại.
+ * - Số ngày còn lại tính cả hôm nay (khác `daysRemaining` của getBudgetOverview là không tính hôm nay).
+ * - Hóa đơn tính từ đầu tháng, chỉ các lần CHƯA được sinh thành giao dịch; lần đã sinh nằm sẵn trong
+ *   "đã chi" nên không bị trừ hai lần. Nhờ vậy khoản đến hạn hôm nay mà job chưa kịp chạy vẫn được tính.
+ * - Chỉ trừ khoản chi định kỳ, không cộng khoản thu định kỳ (thu nhập chưa về thì chưa tiêu được).
+ * - perDay không bao giờ âm. null nếu tháng của `today` chưa có ngân sách.
+ */
+export function getSafeToSpend(authUserId: string, today: string = vnClock().date): SafeToSpend | null {
+  const month = today.slice(0, 7)
+  const progress = getBudgetProgress(authUserId, month)
+  if (!progress) return null
+  const [year, monthNumber] = month.split('-').map(Number)
+  const lastDay = new Date(year, monthNumber, 0).getDate()
+  const daysLeft = lastDay - Number(today.slice(8, 10)) + 1
+  const upcomingBills = listUpcomingOccurrences(authUserId, `${month}-01`, `${month}-${String(lastDay).padStart(2, '0')}`)
+    .filter((occurrence) => occurrence.type === 'expense')
+    .reduce((sum, occurrence) => sum + occurrence.amount, 0)
+  const available = Math.max(0, progress.remaining - upcomingBills)
+  return { perDay: Math.round(available / daysLeft), remaining: progress.remaining, upcomingBills, daysLeft }
 }

@@ -8,7 +8,8 @@ import type {
   TransactionWithRelations,
   NetWorthData,
 } from '@pf/shared'
-import { getBudgetProgress } from './budgetService'
+import { getBudgetProgress, getSafeToSpend } from './budgetService'
+import { vnClock } from '../lib/vnTime'
 import { getNetWorth } from './assetService'
 
 function getProfileId(authUserId: string): string {
@@ -198,5 +199,6 @@ export function getDashboardData(authUserId: string, month: string): DashboardDa
         spent: c.spent,
       }))
     })(),
+    safeToSpend: month === vnClock().date.slice(0, 7) ? getSafeToSpend(authUserId) : null,
   }
 }

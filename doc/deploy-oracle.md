@@ -96,48 +96,15 @@ docker compose version
 
 ---
 
-## 5. Sửa code trước khi deploy (3 điểm BẮT BUỘC)
+## 5. Những gì repo đã làm sẵn cho production
 
-Đây là 3 chỗ đã phát hiện khi rà dự án. **Làm ở máy local, commit, rồi mới đưa lên VPS.**
+Ba điểm từng phải sửa tay nay đã nằm trong repo:
 
-### 5a. Tự động chạy migration khi khởi động
-Hiện `Dockerfile` chỉ start server, **không chạy migrate** → volume trống lần đầu sẽ không có bảng. Tạo entrypoint:
+- **Migration tự chạy khi khởi động**: `docker-entrypoint.sh` chạy `db:migrate` rồi mới start server. Migration lỗi thì container dừng, không chạy trên DB sai schema.
+- **Web gọi cùng origin**: không set `VITE_API_URL` thì web gọi `/api/...` đúng domain đang mở (`apiClient.ts`, `auth-client.ts`, `useTransactions.ts`, `useReports.ts` đã đổi mặc định sang `window.location.origin`). Docker bỏ qua `.env` lúc build nên bản build luôn là same-origin.
+- **Env theo domain**: `docker-compose.yml` đọc `.env` (bước 7); `BETTER_AUTH_URL`, `FRONTEND_URL`, `PUBLIC_BASE_URL` đều là `https://<APP_DOMAIN>`.
 
-**Tạo file `docker-entrypoint.sh`** (thư mục gốc):
-```bash
-#!/bin/sh
-set -e
-echo "Running database migrations..."
-bun run --filter './apps/server' db:migrate
-echo "Starting server..."
-exec bun run apps/server/src/index.ts
-```
-
-**Sửa cuối `Dockerfile`** — thay dòng `CMD`:
-```dockerfile
-COPY docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
-
-ENV NODE_ENV=production
-EXPOSE 3000
-
-CMD ["./docker-entrypoint.sh"]
-```
-
-### 5b. Sửa `VITE_API_URL` để dùng same-origin
-Frontend `apiClient.ts` và `auth-client.ts` mặc định gọi `http://localhost:3000` nếu không set biến. Vì production server phục vụ frontend cùng origin, ta build với URL công khai. Có 2 cách:
-
-- **Cách khuyến nghị (đường dẫn tương đối):** đổi mặc định thành chuỗi rỗng để gọi same-origin:
-  - `apps/web/src/services/apiClient.ts`: `const API_BASE = import.meta.env.VITE_API_URL ?? ''`
-  - `apps/web/src/lib/auth-client.ts`: `baseURL: import.meta.env.VITE_API_URL ?? ''`
-  - → khi đó frontend gọi `/api/...` đúng domain đang mở, không cần biết trước domain.
-- **Hoặc** giữ nguyên code, và luôn set `VITE_API_URL=https://your-domain` lúc build (xem bước 7).
-
-### 5c. Env production trỏ đúng domain/IP
-`BETTER_AUTH_URL` và `FRONTEND_URL` phải là domain/IP thật (không còn `localhost`) — xử lý ở bước 7.
-
-> Sau khi sửa xong: `git add -A && git commit -m "chore: production deploy config"`.
-
+Có sẵn thêm: Caddy (HTTPS tự động), `restart: unless-stopped`, healthcheck, `TZ=Asia/Ho_Chi_Minh`, dừng gọn khi nhận SIGTERM (gộp WAL rồi đóng SQLite), và `.dockerignore` loại `apps/server/data` để file DB local không lọt vào image.
 ---
 
 ## 6. Đưa mã nguồn lên VPS
@@ -162,42 +129,26 @@ rsync -av --exclude node_modules --exclude .git \
 
 ## 7. Cấu hình biến môi trường production
 
-Trên VPS, trong thư mục `personal-finance`, tạo file `.env`:
+Trên VPS, trong thư mục `personal-finance`, tạo `.env` từ mẫu rồi điền giá trị thật:
 ```bash
-cat > .env <<'EOF'
-# Sinh secret ngẫu nhiên >= 32 ký tự
-BETTER_AUTH_SECRET=THAY_BANG_CHUOI_NGAU_NHIEN_32_KY_TU
-EOF
+cp .env.example .env
+sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -hex 32)|" .env
+nano .env
 ```
-Sinh secret nhanh:
-```bash
-echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" > .env
-```
+Các biến cần đặt ở production:
 
-**Sửa `docker-compose.yml`** cho production (đổi `localhost` → domain/IP thật). Ví dụ dùng domain `finance.example.com`:
-```yaml
-services:
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=file:./data/app.db
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      - BETTER_AUTH_URL=https://finance.example.com
-      - FRONTEND_URL=https://finance.example.com
-      - NODE_ENV=production
-      - PORT=3000
-    volumes:
-      - db-data:/app/data
-    restart: unless-stopped        # tự chạy lại khi VM reboot
-volumes:
-  db-data:
-```
+| Biến | Giá trị |
+|---|---|
+| `APP_DOMAIN` | `finance.example.com` (A record đã trỏ về Public IP) |
+| `BETTER_AUTH_URL`, `FRONTEND_URL`, `PUBLIC_BASE_URL` | `https://finance.example.com` (cùng một địa chỉ, vì web và API chung origin) |
+| `BETTER_AUTH_SECRET` | chuỗi ngẫu nhiên ≥ 32 ký tự (lệnh `sed` ở trên đã sinh) |
+| `AI_PROVIDER`, `OPENROUTER_API_KEY` hoặc `ANTHROPIC_API_KEY` | như bản dev |
+| `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET` | như bản dev (secret ≥ 8 ký tự) |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | tùy chọn, bật sao lưu ra ngoài máy chủ (mục 10) |
 
-> Nếu bạn chọn 5b cách "đường dẫn tương đối" thì **không cần** set `VITE_API_URL`. Nếu giữ code cũ, thêm build arg `VITE_API_URL` và truyền vào lúc build.
+`docker-compose.yml` tự đặt `DATABASE_URL`, `NODE_ENV=production`, `PORT` và `TZ` (ghi đè `.env`), nên không khai báo ở đây. Không cần `VITE_API_URL`.
 
-> Chưa có domain? Tạm dùng `http://<PUBLIC_IP>:3000` cho cả 2 URL và mở cổng 3000 ở bước 3 để test. Nhưng auth cookie nên chạy qua HTTPS (bước 9).
+> Chưa có domain? Auth cookie cần HTTPS nên vẫn nên có tên miền; có thể dùng subdomain miễn phí (ví dụ DuckDNS) trỏ về Public IP.
 
 ---
 
@@ -209,52 +160,39 @@ docker compose up -d --build
 ```
 Lần build đầu mất vài phút (cài deps + build frontend). Kiểm tra:
 ```bash
-docker compose ps               # container phải ở trạng thái Up
-docker compose logs -f app      # xem log, phải thấy "Running database migrations" rồi server start
-curl http://localhost:3000/api/health   # {"status":"ok",...}
+docker compose ps               # app phải "healthy", caddy phải Up
+docker compose logs -f app      # thấy {"applied":[...]} của migration, rồi "Started ... server"
+docker compose exec app wget -qO- localhost:3000/api/health   # {"status":"ok",...}
 ```
-Nếu đã mở cổng 3000: mở trình duyệt `http://<PUBLIC_IP>:3000`.
+Cổng 3000 không mở ra ngoài; chỉ Caddy (80/443) nhận kết nối. Mở `https://<APP_DOMAIN>` ở bước 9.
+
+### 8b. Chuyển dữ liệu từ máy local (làm TRƯỚC lần chạy đầu nếu muốn giữ dữ liệu hiện có)
+
+1. Trên máy local, tạo bản chụp nhất quán (an toàn kể cả khi dev server đang chạy):
+   ```bash
+   sqlite3 apps/server/data/app.db ".backup app-export.db"
+   ```
+2. Đưa lên VPS: `scp app-export.db ubuntu@<PUBLIC_IP>:~/`
+3. Trên VPS, tạo volume rồi chép file vào (các migration còn thiếu sẽ tự chạy khi app khởi động):
+   ```bash
+   docker compose create app
+   docker run --rm -v personal-finance_db-data:/data -v ~/app-export.db:/in/app.db:ro alpine cp /in/app.db /data/app.db
+   ```
+   Tên volume là `<tên thư mục dự án>_db-data`; xem đúng tên bằng `docker volume ls`.
+
+### 8c. Đăng ký webhook Zalo (một lần, khi `PUBLIC_BASE_URL` đã là HTTPS cố định)
+```bash
+docker compose exec app bun run apps/server/scripts/zalo-set-webhook.ts
+```
+Cần `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET`, `PUBLIC_BASE_URL` trong `.env`. Khác với quick tunnel, không phải đăng ký lại mỗi lần khởi động. Kiểm tra bằng cách nhắn thử cho bot.
 
 ---
 
-## 9. Cài HTTPS với Caddy (khuyến nghị)
+## 9. HTTPS với Caddy (đã cấu hình sẵn)
 
-Caddy tự động xin chứng chỉ Let's Encrypt, đơn giản hơn nginx. **Cần 1 domain trỏ A record về Public IP.**
+`docker-compose.yml` đã có service `caddy` và `Caddyfile` dùng `{$APP_DOMAIN}`; Caddy tự xin và gia hạn chứng chỉ Let's Encrypt. Điều kiện: A record của `APP_DOMAIN` đã trỏ về Public IP và cổng 80/443 đã mở ở bước 3.
 
-Tạo `Caddyfile` trong thư mục dự án:
-```
-finance.example.com {
-    reverse_proxy app:3000
-}
-```
-
-Thêm service Caddy vào `docker-compose.yml`:
-```yaml
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - app
-
-volumes:
-  db-data:
-  caddy-data:
-  caddy-config:
-```
-Và **bỏ** dòng `ports: - "3000:3000"` của service `app` (không expose trực tiếp nữa, chỉ Caddy ra ngoài).
-
-Chạy lại:
-```bash
-docker compose up -d --build
-```
-Truy cập `https://finance.example.com` — Caddy tự cấp SSL. Sau bước này nên **đóng cổng 3000** trong Security List.
+Truy cập `https://<APP_DOMAIN>`. Nếu chứng chỉ chưa được cấp: `docker compose logs caddy`. Nếu từng mở cổng 3000 để thử thì **đóng lại** trong Security List.
 
 ---
 
@@ -267,12 +205,37 @@ git pull                        # hoặc rsync lại
 docker compose up -d --build    # build lại & restart, volume DB giữ nguyên
 ```
 
-**Backup database (SQLite trong volume):**
+**Sao lưu tự động (đã có sẵn trong app, chỉ chạy ở production):**
+
+Mỗi ngày từ 02:00 giờ VN (hoặc ngay khi khởi động nếu hôm nay chưa chạy), app tạo `app-YYYYMMDD.db.gz`: bản chụp nhất quán bằng `VACUUM INTO` (an toàn khi DB đang chạy), đã kiểm tra `integrity_check`, nén gzip. Giữ 14 bản gần nhất ở volume `backups` (`/app/backups`) và, nếu có cấu hình `R2_*`, đẩy thêm lên Cloudflare R2.
+
+Bật bản ngoài máy chủ (mất VM vẫn còn dữ liệu):
+1. Cloudflare → R2 → tạo bucket **private**.
+2. Tạo API token loại *Object Read & Write*, giới hạn riêng cho bucket đó.
+3. Điền `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` vào `.env`, rồi `docker compose up -d`.
+4. (Khuyến nghị) Thêm lifecycle rule cho prefix `backups/` để tự xóa bản cũ hơn 90 ngày; app không tự xóa trên R2.
+5. Kiểm tra: `docker compose logs app | grep backup` phải thấy `app-YYYYMMDD.db.gz (đã đẩy lên R2)` và file hiện trong bucket, dưới `backups/`.
+
+Mỗi ngày chỉ chụp một lần. Nếu hôm nay đã chạy xong rồi mới cấu hình R2, hoặc upload lỗi: tick sau (10 phút) chỉ upload lại bản đã có, không chụp lại. Muốn ép chạy lại ngay:
 ```bash
-# Copy file DB ra ngoài
-docker compose cp app:/app/data/app.db ./backup-app-$(date +%F).db
+docker compose exec app bun -e "new (require('bun:sqlite').Database)('data/app.db').run(\"DELETE FROM job_runs WHERE name='backup'\")"
+docker compose restart app
 ```
-Nên đặt cron `crontab -e` để backup định kỳ, ví dụ hằng ngày 2h sáng.
+Thiếu `R2_*` thì log có dòng cảnh báo `[backup] chưa cấu hình R2_*` và bản sao lưu chỉ nằm trên máy chủ.
+
+**Lấy bản sao lưu ra / khôi phục:**
+```bash
+# Bản trên máy chủ (hoặc tải app-YYYYMMDD.db.gz từ R2 về)
+docker compose cp app:/app/backups/app-20261121.db.gz .
+gunzip -c app-20261121.db.gz > restored.db
+
+# Khôi phục: dừng app → thay file DB (xóa cả -wal/-shm của DB cũ) → chạy lại
+docker compose stop app
+docker run --rm -v personal-finance_db-data:/data -v "$PWD/restored.db":/in/app.db:ro alpine \
+  sh -c 'rm -f /data/app.db /data/app.db-wal /data/app.db-shm && cp /in/app.db /data/app.db'
+docker compose start app     # migration tự áp dụng nếu bản sao lưu cũ hơn schema hiện tại
+```
+Nên thử khôi phục một lần vào máy khác trước khi cần đến nó thật.
 
 **Xem log / khởi động lại:**
 ```bash
@@ -290,10 +253,13 @@ docker compose exec app bun run --filter './apps/server' db:seed
 
 ## Checklist tổng
 - [ ] VM A1 Ubuntu đã RUNNING, có Public IP
+- [ ] A record của tên miền trỏ về Public IP
 - [ ] Mở cổng 80/443 ở Security List **và** iptables
 - [ ] Cài Docker + compose
-- [ ] Sửa 3 điểm code (entrypoint migrate, VITE_API_URL, env domain)
-- [ ] Tạo `.env` với `BETTER_AUTH_SECRET` ngẫu nhiên
-- [ ] `docker compose up -d --build` → health check OK
-- [ ] (Khuyến nghị) Caddy HTTPS + domain
-- [ ] Đặt lịch backup file `app.db`
+- [ ] Tạo `.env` từ `.env.example` (APP_DOMAIN, 3 URL, BETTER_AUTH_SECRET ngẫu nhiên, AI_*, ZALO_*)
+- [ ] (Nếu giữ dữ liệu cũ) chuyển `app.db` lên volume — mục 8b
+- [ ] `docker compose up -d --build` → `docker compose ps` thấy `app` healthy
+- [ ] Mở `https://<APP_DOMAIN>` được và đăng nhập được
+- [ ] Đăng ký webhook Zalo — mục 8c, nhắn thử cho bot
+- [ ] Bật sao lưu R2 (mục 10) và thử khôi phục một lần
+- [ ] Đóng cổng 3000 trong Security List nếu từng mở

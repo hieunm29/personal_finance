@@ -1,8 +1,8 @@
 # Tiến độ (Progress)
 
 ## Trạng thái Hiện tại
-**Giai đoạn:** Phase 1 MVP — Budget Planner hoàn thành (US-BUD-01→07) + Dashboard integration fixed
-**Cập nhật:** 2026-03-04
+**Giai đoạn:** Phase 1 MVP đã xong; đang làm "Đợt 1 — dùng được mỗi ngày" (xem mục cuối phần Đã hoàn thành)
+**Cập nhật:** 2026-11-21
 
 ---
 
@@ -195,11 +195,29 @@
 - [x] Chuyển khoản giữa tài khoản + tiền mặt có số dư (migration 0005), web + bot
 - [ ] Chưa chạy 24/7 (cần VPS)
 
-## 🔲 Còn Lại — Phase 2
+### Đợt 1 "dùng được mỗi ngày" (2026-11-21) — chưa commit
+Đã làm và có test (`bun test` 68 pass, typecheck sạch):
+- [x] **Bot đọc ảnh** hóa đơn / chuyển khoản: tải ảnh → Claude đọc → ĐỀ XUẤT → trả lời "ok" mới ghi. Lượt ảnh không có tool ghi (`readOnly`), guard `proposalOnly`. Chi tiết: `doc/7.ai_assistant_architecture.md` mục 7.5. *Chưa thử ảnh thật từ Zalo.*
+- [x] **"Còn X/ngày"** trên Dashboard đã trừ hóa đơn định kỳ chưa ghi (`getSafeToSpend`, `listUpcomingOccurrences`); bot trả lời được "hôm nay tiêu được bao nhiêu". Đã xem trên trình duyệt, layout giữ nguyên.
+- [x] **Hạ tầng deploy**: `docker-entrypoint.sh` tự migrate, Caddy HTTPS, healthcheck, `TZ=Asia/Ho_Chi_Minh`, dừng gọn khi SIGTERM (checkpoint WAL), `.dockerignore` loại `apps/server/data`. Hướng dẫn: `doc/deploy-oracle.md`.
+- [x] **Scheduler** `apps/server/src/jobs/` (job recurring + sao lưu; bảng `job_runs`, migration 0006) và `lib/vnTime.ts` (giờ VN).
+- [x] **Sao lưu SQLite** hằng ngày 02:00 VN: `VACUUM INTO` + integrity_check + gzip, giữ 14 bản, đẩy Cloudflare R2 nếu có `R2_*`. Chỉ bật ở production (`BACKUP_ENABLED=1` để ép). *Chưa thử upload R2 thật.*
+- [x] Script `bun run zalo:send-test <email>` để kiểm tra bot có gửi tin chủ động được không.
 
-### Module 2: Transactions Phase 2
-- [ ] US-TXN-08: Giao dịch định kỳ (recurringService + RecurringPage)
-- [ ] US-TXN-09: Xuất dữ liệu CSV
+Còn lại của Đợt 1:
+- [x] Web gọi API cùng origin khi không set `VITE_API_URL` (`apiClient.ts`, `auth-client.ts`, `useTransactions.ts`, `useReports.ts`); không còn mặc định `localhost:3000` trong `apps/web/src`.
+- [ ] Người dùng tự làm: Oracle VM, tên miền, `.env` production, bucket R2 + API token, chuyển `app.db` (doc/deploy-oracle.md 8b), đăng ký webhook Zalo (8c).
+- [ ] Chạy `bun run zalo:send-test <email>` sau ≥ 24 giờ không nhắn bot. **Đạt** thì làm Bước 4: thông báo chủ động (tin sáng, nhắc ghi buổi tối, cảnh báo ngân sách 80/100%, tóm tắt tuần; bảng `notification_prefs` + `notification_log`, mục Cài đặt "Thông báo Zalo"). **Không đạt** thì lập lại kế hoạch.
+
+## 🔲 Còn Lại
+
+### Transactions (đã làm, ghi chú cho đúng thực tế)
+- [x] US-TXN-08: Giao dịch định kỳ — `recurringService`, job sinh giao dịch hằng giờ
+- [x] US-TXN-09: Xuất CSV — `/api/transactions/export`, `/api/reports/export`
+
+### Đợt 2 và 3 (xem bản đánh giá)
+- [ ] Đối soát số dư, lịch hóa đơn có xác nhận "đã trả", thẻ tín dụng, cho vay / đi vay
+- [ ] Mục tiêu tiết kiệm, tự cập nhật giá vàng / cổ phiếu, PWA
 
 ---
 

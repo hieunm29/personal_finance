@@ -24,7 +24,6 @@ interface FinancialHealthCardProps {
 
 interface DashboardKpisProps {
   dashboard: DashboardData
-  budget?: BudgetWithProgress | null
   month: string
   currency: string
 }
@@ -55,10 +54,6 @@ function isCurrentMonth(month: string): boolean {
 function divisorForMonth(month: string): number {
   if (!isCurrentMonth(month)) return monthDays(month)
   return Math.max(new Date().getDate(), 1)
-}
-
-function remainingDaysInMonth(month: string): number {
-  return Math.max(monthDays(month) - divisorForMonth(month), 0)
 }
 
 function percentChange(current: number, previous: number): number | null {
@@ -345,6 +340,7 @@ function KpiCard({
   icon,
   sparkline,
   footnote,
+  footnoteTitle,
   amountTone,
 }: {
   title: string
@@ -355,6 +351,7 @@ function KpiCard({
   icon: string
   sparkline?: number[]
   footnote?: string
+  footnoteTitle?: string
   amountTone?: 'positive' | 'negative'
 }) {
   return (
@@ -365,7 +362,7 @@ function KpiCard({
       </div>
       <div className={`db-overview-kpi-value ${amountTone ? `db-overview-kpi-value-${amountTone}` : ''}`}>{amount}</div>
       <div className="db-overview-kpi-foot">
-        {trend !== undefined ? <TrendBadge value={trend ?? null} reverseColor={reverseTrend} /> : footnote && <span className="db-badge warn">{footnote}</span>}
+        {trend !== undefined ? <TrendBadge value={trend ?? null} reverseColor={reverseTrend} /> : footnote && <span className="db-badge warn" title={footnoteTitle}>{footnote}</span>}
         {trend !== undefined && <span className="db-card-sub">vs tháng trước</span>}
         {sparkline && <Sparkline values={sparkline} color={color === 'expense' ? '#DC2626' : color === 'info' ? '#2563EB' : '#059669'} label={`Xu hướng ${title.toLowerCase()}`} />}
       </div>
@@ -373,13 +370,15 @@ function KpiCard({
   )
 }
 
-export function DashboardKpis({ dashboard, budget, month, currency }: DashboardKpisProps) {
+export function DashboardKpis({ dashboard, month, currency }: DashboardKpisProps) {
   const previousNet = dashboard.prevMonthIncome - dashboard.prevMonthExpense
   const dailyExpense = Math.round(dashboard.totalExpense / divisorForMonth(month))
-  const remainingDays = remainingDaysInMonth(month)
-  const dailyBudget = budget && remainingDays > 0 && budget.remaining >= 0
-    ? Math.round(budget.remaining / remainingDays)
-    : null
+  // "Còn X/ngày" do server tính (đã trừ hóa đơn định kỳ chưa ghi, số ngày tính cả hôm nay) — xem getSafeToSpend.
+  const safe = dashboard.safeToSpend
+  const dailyBudget = safe && safe.remaining >= 0 ? safe.perDay : null
+  const dailyBudgetTitle = safe
+    ? `Còn ${safe.daysLeft} ngày (tính cả hôm nay)${safe.upcomingBills > 0 ? `, đã trừ ${formatCurrency(safe.upcomingBills, currency)} hóa đơn định kỳ chưa ghi` : ''}`
+    : undefined
   const points = dashboard.monthlyChart
 
   return (
@@ -416,6 +415,7 @@ export function DashboardKpis({ dashboard, budget, month, currency }: DashboardK
         color="brand"
         icon="◒"
         footnote={dailyBudget !== null ? `Còn ${formatCurrency(dailyBudget, currency)}/ngày` : undefined}
+        footnoteTitle={dailyBudgetTitle}
       />
     </section>
   )

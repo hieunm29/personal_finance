@@ -1,4 +1,5 @@
 import type { ToolCallRecord } from './tools'
+import { READ_TOOL_NAMES, WRITE_TOOL_NAMES } from './toolNames'
 
 /**
  * Lớp chống "bịa" (hallucination guard).
@@ -24,8 +25,8 @@ const TRANSFER_CLAIM = claim('chuyển|rút|nộp|nạp')
 const DELETE_CLAIM = claim('xóa(?!\\s*ghi\\s*nhớ)|xoá(?!\\s*ghi\\s*nhớ)')
 const MONEY_AMOUNT = /\d[\d.,]*\s?(đ|₫|vnđ|vnd|k\b|nghìn|ngàn|triệu|tr\b)/i
 
-const READ_TOOLS = new Set(['search_transactions', 'get_monthly_summary', 'get_budget_status', 'get_net_worth'])
-const WRITE_TOOLS = new Set(['create_transaction', 'create_transfer', 'undo_last_action', 'remember_fact', 'forget_fact'])
+const READ_TOOLS = READ_TOOL_NAMES
+const WRITE_TOOLS = WRITE_TOOL_NAMES
 
 export type GuardVerdict =
   | { action: 'accept' }
@@ -66,9 +67,21 @@ const BLOCKED_REPLY = {
   forget: 'Xin lỗi, mình CHƯA quên được điều này. Bạn nhắn lại giúp mình nhé.',
 }
 
-export function checkReply(reply: string, log: ToolCallRecord[]): GuardVerdict {
+export interface CheckOptions {
+  /**
+   * Lượt chỉ được ĐỀ XUẤT (tin có ảnh: không có tool ghi). Số tiền được đọc từ ảnh nên không cần tool
+   * đứng sau; còn câu "Đã ghi / Đã chuyển…" thì luôn sai vì lượt này không thể ghi được gì.
+   */
+  proposalOnly?: boolean
+}
+
+const PROPOSAL_NUDGE = 'Lượt này chỉ được ĐỀ XUẤT: bạn không có công cụ ghi nên CHƯA ghi gì cả. ' +
+  'Hãy viết lại, không dùng "Đã ghi / Đã chuyển / Đã hoàn tác…", liệt kê các giao dịch dự kiến và kết thúc bằng câu hỏi xác nhận.'
+
+export function checkReply(reply: string, log: ToolCallRecord[], options: CheckOptions = {}): GuardVerdict {
   const claim = unbackedClaim(reply, log)
-  if (claim) return { action: 'retry', nudge: RETRY_NUDGE[claim] }
+  if (claim) return { action: 'retry', nudge: options.proposalOnly ? PROPOSAL_NUDGE : RETRY_NUDGE[claim] }
+  if (options.proposalOnly) return { action: 'accept' }
   const usedAnyDataTool = log.some((call) => call.ok && (READ_TOOLS.has(call.name) || WRITE_TOOLS.has(call.name)))
   if (MONEY_AMOUNT.test(reply) && !usedAnyDataTool) {
     return {

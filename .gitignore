@@ -18,6 +18,9 @@ data/
 *.db-journal
 *.db-wal
 
+# Bản sao lưu SQLite (app-YYYYMMDD.db.gz)
+backups/
+
 # Logs
 *.log
 
