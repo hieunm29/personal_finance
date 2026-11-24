@@ -15,6 +15,7 @@ import BudgetProgressCard from '../components/dashboard/BudgetProgressCard'
 import DashboardInsights from '../components/dashboard/DashboardInsights'
 import TransactionForm from '../components/transaction/TransactionForm'
 import DashboardIcon from '../components/dashboard/DashboardIcon'
+import MonthPicker from '../components/common/MonthPicker'
 import './dashboard.css'
 
 export default function DashboardPage() {
@@ -70,13 +71,15 @@ export default function DashboardPage() {
           <p>{now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} · Còn {daysLeft} ngày nữa hết tháng</p>
         </div>
         <div className="db-actions">
-          <label className="db-button db-month-control">
+          <MonthPicker
+            value={month}
+            onChange={setMonth}
+            min="2000-01"
+            max={currentMonth}
+            triggerProps={{ className: 'db-button db-month-control', 'aria-label': `Chọn tháng báo cáo, đang xem ${monthLabel}` }}
+          >
             <DashboardIcon name="calendar" /><span className="db-button-label">{monthLabel}</span>
-            <input aria-label="Chọn tháng báo cáo" type="month" value={month} max={currentMonth} min="2000-01" onChange={event => {
-              const value = event.target.value
-              if (/^\d{4}-\d{2}$/.test(value) && value >= '2000-01' && value <= currentMonth) setMonth(value)
-            }} />
-          </label>
+          </MonthPicker>
           <button className="db-button db-icon-button" aria-label="Xem lưu ý tài chính" onClick={() => {
             insightsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
             insightsRef.current?.focus({ preventScroll: true })

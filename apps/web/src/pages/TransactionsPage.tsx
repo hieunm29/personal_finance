@@ -17,6 +17,7 @@ import { useWallets } from '../hooks/useWallets'
 import TransactionForm from '../components/transaction/TransactionForm'
 import TransactionCategoryIcon from '../components/transaction/TransactionCategoryIcon'
 import DashboardIcon from '../components/dashboard/DashboardIcon'
+import MonthPicker from '../components/common/MonthPicker'
 import { formatCurrency, formatDate } from '../utils/format'
 import './transactions.css'
 
@@ -320,7 +321,7 @@ export default function TransactionsPage() {
   ].filter(Boolean) as { key: string; label: string; remove: () => void }[]
 
   return <div className="tx-page">
-    <header className="tx-page-header"><div><h1>Giao dịch</h1><p>Ghi nhận, tìm kiếm và quản lý mọi khoản thu chi</p></div><div className="tx-page-actions"><label className="tx-month-select" data-month={`Tháng ${Number(month.slice(5))}/${month.slice(0, 4)}`}><DashboardIcon name="calendar" size={17} /><span className="sr-only">Tháng đang xem</span><input type="month" value={month} onChange={(event) => setMonthFilter(event.target.value)} aria-label="Chọn tháng" /><span aria-hidden="true">⌄</span></label><button type="button" className="tx-button" onClick={handleExport} disabled={exportMutation.isPending}>⇩ <span>{exportMutation.isPending ? 'Đang xuất…' : 'Xuất'}</span></button><button type="button" className="tx-button primary" onClick={() => setCreateOpen(true)}><DashboardIcon name="plus" size={17} /><span>Thêm giao dịch</span></button></div></header>
+    <header className="tx-page-header"><div><h1>Giao dịch</h1><p>Ghi nhận, tìm kiếm và quản lý mọi khoản thu chi</p></div><div className="tx-page-actions"><MonthPicker value={month} onChange={setMonthFilter} triggerProps={{ className: 'tx-month-select', 'data-month': `Tháng ${Number(month.slice(5))}/${month.slice(0, 4)}`, 'aria-label': `Chọn tháng, đang xem Tháng ${Number(month.slice(5))}/${month.slice(0, 4)}` }}><DashboardIcon name="calendar" size={17} /><span aria-hidden="true">⌄</span></MonthPicker><button type="button" className="tx-button" onClick={handleExport} disabled={exportMutation.isPending}>⇩ <span>{exportMutation.isPending ? 'Đang xuất…' : 'Xuất'}</span></button><button type="button" className="tx-button primary" onClick={() => setCreateOpen(true)}><DashboardIcon name="plus" size={17} /><span>Thêm giao dịch</span></button></div></header>
 
     <section className="tx-summary" aria-label="Tổng hợp">
       <StatCard tone="income" icon="↓" label="Tổng thu" value={`+${formatCurrency(summaryIncome, currency)}`} footer={`${analytics?.incomeCount ?? '—'} giao dịch`} />

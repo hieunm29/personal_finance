@@ -48,7 +48,7 @@
   cursor: pointer;
 }
 .tx-month-select::after { content: attr(data-month); color: var(--tx-text); font-size: 13px; white-space: nowrap; }
-.tx-month-select input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; outline: 0; cursor: pointer; }
+.tx-month-select:focus-visible { outline: 2px solid var(--tx-brand); outline-offset: 2px; }
 .tx-month-select span { color: var(--tx-subtle); }
 
 .tx-button {
@@ -251,7 +251,6 @@
   .tx-page-header p { display: none; }
   .tx-page-actions .tx-button.primary { display: none; }
   .tx-page-actions .tx-button span { display: none; }
-  .tx-month-select input { width: 18px; opacity: 0; }
   .tx-filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tx-row { grid-template-columns: 40px minmax(0,1fr) auto; padding-right: 16px; padding-left: 16px; }
   .tx-row-actions { display: none; }
