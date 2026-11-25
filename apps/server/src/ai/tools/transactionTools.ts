@@ -4,7 +4,7 @@ import { db } from '../../db'
 import { aiActions } from '../../db/schema'
 import { createTransaction, createTransfer, deleteTransaction, getTransactions } from '../../services/transactionService'
 import { getDefaultAccountId, getProfileIdByAuthUser, getUserFinanceContext } from '../userContext'
-import { centsToVnd, json, todayVN, toolFail, vndToCents } from './helpers'
+import { centsToVnd, clampNote, json, MAX_NOTE_LENGTH, todayVN, toolFail, vndToCents } from './helpers'
 import type { ToolContext } from './index'
 
 /**
@@ -33,7 +33,13 @@ export function buildTransactionTools(ctx: ToolContext) {
         categoryId: { type: 'string', description: 'id danh mục lấy từ danh sách trong system prompt' },
         walletId: { type: 'string', description: 'id ví/tài khoản; bỏ trống để dùng ví mặc định' },
         date: { type: 'string', description: 'YYYY-MM-DD; bỏ trống = hôm nay. "hôm qua" → lùi 1 ngày' },
-        note: { type: 'string', description: 'Ghi chú ngắn bằng lời của người dùng, ví dụ "Cà phê Highlands"' },
+        note: {
+          type: 'string',
+          maxLength: MAX_NOTE_LENGTH,
+          description:
+            'Ghi chú ngắn bằng lời của người dùng, ví dụ "Cà phê Highlands". ' +
+            'Hóa đơn mua hàng: "Tên cửa hàng: Món 1 60.000; Món 2 18.900; …" (tối đa 500 ký tự)',
+        },
       },
       required: ['type', 'amountVnd', 'categoryId'],
       additionalProperties: false,
@@ -52,7 +58,7 @@ export function buildTransactionTools(ctx: ToolContext) {
         categoryId: input.categoryId,
         walletId,
         date: input.date || todayVN(),
-        note: input.note,
+        note: clampNote(input.note),
         isRecurring: false,
       })
 

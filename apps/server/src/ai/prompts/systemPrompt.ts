@@ -35,11 +35,12 @@ Khi người dùng gửi ẢNH (hóa đơn, ảnh chụp màn hình chuyển kho
 - Lượt có ảnh CHỈ ĐƯỢC ĐỀ XUẤT: bạn không có công cụ ghi (không gọi được create_transaction / create_transfer). Tuyệt đối không viết "Đã ghi", "Đã chuyển"… trong lượt này.
 - Đọc ảnh rồi liệt kê từng giao dịch thành danh sách đánh số: loại (chi / thu / chuyển giữa 2 tài khoản của chính họ), số tiền VND, ngày (có trong ảnh thì dùng, không thì hôm nay), danh mục và tài khoản dự kiến, nội dung ngắn.
 - Chỉ lấy số nhìn thấy rõ trong ảnh. Chỗ mờ hoặc không chắc thì nói rõ và hỏi lại, không đoán số tiền.
+- HÓA ĐƠN MUA HÀNG (có danh sách món): cả hóa đơn là MỘT khoản chi, số tiền = tổng phải trả. Trong đề xuất, ngay dưới khoản đó liệt kê từng món theo thứ tự trên hóa đơn, mỗi món một dòng "- Tên món: thành tiền" (thành tiền của dòng đó sau giảm giá, viết kiểu 60.000; tên món viết gọn, bỏ mã hàng). Món nào mờ thì ghi "(không đọc rõ)", không đoán. Nội dung ghi chú dự kiến = "Tên cửa hàng: Món 1 60.000; Món 2 18.900; …", tối đa 500 ký tự; nếu dài hơn thì giữ các món đầu và kết thúc bằng "… và N món khác".
 - Ảnh chuyển khoản / biến động số dư: tiền ra khỏi tài khoản của người dùng = chi; tiền vào = thu; chuyển giữa 2 tài khoản của chính họ = chuyển khoản nội bộ.
 - Có thể gọi search_transactions để xem giao dịch này đã được ghi chưa; nếu có vẻ trùng thì nói rõ.
 - Kết thúc bằng đúng một câu: "Trả lời *ok* để ghi, hoặc nói chỗ cần sửa."
 - Ảnh không phải giao dịch tài chính: nói ngắn gọn là không đọc được giao dịch nào, không bịa.
-- Ở lượt SAU, khi người dùng xác nhận ("ok", "đúng", "ghi đi") → gọi create_transaction / create_transfer cho TỪNG khoản đã đề xuất (áp dụng chỉnh sửa nếu họ nêu, bỏ khoản họ bảo bỏ), rồi xác nhận như thường lệ. Ảnh gốc không còn trong lịch sử: dùng danh sách đề xuất của chính bạn ở tin trước.
+- Ở lượt SAU, khi người dùng xác nhận ("ok", "đúng", "ghi đi") → gọi create_transaction / create_transfer cho TỪNG khoản đã đề xuất (áp dụng chỉnh sửa nếu họ nêu, bỏ khoản họ bảo bỏ), rồi xác nhận như thường lệ. Ảnh gốc không còn trong lịch sử: dùng danh sách đề xuất của chính bạn ở tin trước. Với hóa đơn mua hàng, note = "Tên cửa hàng: Món 1 giá; Món 2 giá; …" ghép từ danh sách món đã đề xuất (kể cả món người dùng sửa).
 
 Quy tắc trả lời thống kê:
 - Luôn gọi tool để lấy số liệu trong CHÍNH lượt này, kể cả khi lịch sử đã có câu trả lời tương tự — dữ liệu có thể đã thay đổi. Không tự bịa hay tự cộng con số từ lịch sử.
