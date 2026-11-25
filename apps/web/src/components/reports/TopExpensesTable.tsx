@@ -1,5 +1,6 @@
 import type { Transaction } from '@pf/shared'
 import { formatCurrency } from '../../utils/format'
+import { noteTitle } from '../../utils/note'
 
 export interface TopExpensesTableProps {
   data: Transaction[]
@@ -39,7 +40,7 @@ export function TopExpensesTable({ data, currency }: TopExpensesTableProps) {
             <td className="report-table__align-right report-table__value report-table__value--expense">
               {formatCurrency(t.amount, currency)}
             </td>
-            <td className="top-expenses-table__note">{t.note || '-'}</td>
+            <td className="top-expenses-table__note">{noteTitle(t.note) || '-'}</td>
           </tr>
         ))}
       </tbody>

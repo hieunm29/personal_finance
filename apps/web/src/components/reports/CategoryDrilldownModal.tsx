@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { formatCurrency, formatDate } from '../../utils/format'
+import { noteTitle } from '../../utils/note'
 import { useTransactionsByCategory } from '../../hooks/useReports'
 
 export interface CategoryDrilldownModalProps {
@@ -59,7 +60,7 @@ export function CategoryDrilldownModal({
                       <td className="report-table__align-right report-table__value--expense">
                         {formatCurrency(transaction.amount, currency)}
                       </td>
-                      <td>{transaction.note || '—'}</td>
+                      <td>{noteTitle(transaction.note) || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

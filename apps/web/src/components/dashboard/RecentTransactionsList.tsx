@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router'
 import { type TransactionWithRelations } from '@pf/shared'
 import { formatCurrency } from '../../utils/format'
 import TransactionCategoryIcon from '../transaction/TransactionCategoryIcon'
+import { noteTitle } from '../../utils/note'
 import './dashboard-details.css'
 
 interface Props {
@@ -82,7 +83,7 @@ export default function RecentTransactionsList({ transactions, currency, onEditT
               return (
                 <button key={transaction.id} type="button" className="db-detail-transaction" onClick={() => handleTransaction(transaction)} aria-label={`${transaction.category?.name ?? 'Giao dịch'}, ${formatCurrency(transaction.amount, currency)}`}>
                   <span className={`db-detail-transaction-icon ${isIncome ? 'is-income' : isTransfer ? 'is-transfer' : 'is-expense'}`} aria-hidden="true">{isTransfer ? '⇄' : <TransactionCategoryIcon icon={transaction.category?.icon ?? (isIncome ? 'briefcase' : 'wallet')} name={transaction.category?.name} size={18} />}</span>
-                  <span className="db-detail-transaction-body"><span className="db-detail-transaction-name">{transaction.note || transaction.category?.name || 'Giao dịch'}</span><span className="db-detail-transaction-meta">{transaction.category?.name ?? 'Không phân loại'}{transaction.wallet?.name ? ` · ${transaction.wallet.name}` : ''}</span></span>
+                  <span className="db-detail-transaction-body"><span className="db-detail-transaction-name">{noteTitle(transaction.note) || transaction.category?.name || 'Giao dịch'}</span><span className="db-detail-transaction-meta">{transaction.category?.name ?? 'Không phân loại'}{transaction.wallet?.name ? ` · ${transaction.wallet.name}` : ''}</span></span>
                   <span className={`db-detail-transaction-amount ${amountClass}`}>{amountPrefix}{formatCurrency(transaction.amount, currency)}</span>
                 </button>
               )

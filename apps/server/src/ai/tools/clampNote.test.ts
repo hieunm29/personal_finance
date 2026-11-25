@@ -11,26 +11,31 @@ describe('clampNote', () => {
     expect(clampNote('   ')).toBeUndefined()
   })
 
-  test('ghi chú hóa đơn vừa đủ 500 ký tự thì không cắt', () => {
+  test('giữ nguyên các dòng của ghi chú hóa đơn, chuẩn hóa \\r\\n thành \\n', () => {
+    expect(clampNote('Fujimart\r\nĐậu mix hạt 208g: 60.000\r\nĐĩa 9 inch: 16.500'))
+      .toBe('Fujimart\nĐậu mix hạt 208g: 60.000\nĐĩa 9 inch: 16.500')
+  })
+
+  test('ghi chú vừa đủ 500 ký tự thì không cắt', () => {
     const note = 'x'.repeat(MAX_NOTE_LENGTH)
     expect(clampNote(note)).toBe(note)
   })
 
-  test('hóa đơn quá dài: cắt ở ranh giới giữa 2 món, không đứt giữa tên món', () => {
-    const items = Array.from({ length: 60 }, (_, index) => `Món số ${index + 1} 12.500`)
-    const note = `Fujimart: ${items.join('; ')}`
-    const clamped = clampNote(note)!
+  test('hóa đơn quá dài: cắt ở cuối một dòng, không đứt giữa tên món', () => {
+    const items = Array.from({ length: 60 }, (_, index) => `Món số ${index + 1}: 12.500`)
+    const clamped = clampNote(['Fujimart', ...items].join('\n'))!
+    const lines = clamped.split('\n')
 
     expect(clamped.length).toBeLessThanOrEqual(MAX_NOTE_LENGTH)
-    expect(clamped.startsWith('Fujimart: Món số 1 12.500; ')).toBe(true)
-    expect(clamped.endsWith('; …')).toBe(true)
-    // Món cuối cùng còn giữ phải đầy đủ cả giá
-    expect(clamped.slice(0, -'; …'.length)).toMatch(/Món số \d+ 12\.500$/)
+    expect(lines[0]).toBe('Fujimart')
+    expect(lines.at(-1)).toBe('…')
+    // Mọi dòng món còn giữ phải đầy đủ cả giá
+    for (const line of lines.slice(1, -1)) expect(line).toMatch(/^Món số \d+: 12\.500$/)
   })
 
-  test('chuỗi dài không có dấu "; " vẫn bị cắt đúng giới hạn', () => {
+  test('chuỗi dài một dòng vẫn bị cắt đúng giới hạn', () => {
     const clamped = clampNote('a'.repeat(800))!
     expect(clamped.length).toBeLessThanOrEqual(MAX_NOTE_LENGTH)
-    expect(clamped.endsWith('; …')).toBe(true)
+    expect(clamped.endsWith('\n…')).toBe(true)
   })
 })

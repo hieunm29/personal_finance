@@ -20,15 +20,15 @@ export const MAX_NOTE_LENGTH = 500
 /**
  * Tool ghi giao dịch gọi thẳng service, không qua validate của API web, nên phải tự giữ giới hạn
  * 500 ký tự (nếu không, sửa giao dịch đó trên web sẽ bị từ chối). Ghi chú hóa đơn có dạng
- * "Cửa hàng: Món 1 60.000; Món 2 18.900; …" → cắt ở ranh giới "; " gần nhất để không đứt giữa món.
+ * "Cửa hàng\nMón 1: 60.000\nMón 2: 18.900" → cắt ở dòng gần nhất để không đứt giữa một món.
  */
 export function clampNote(note: string | undefined): string | undefined {
-  const trimmed = note?.trim()
+  const trimmed = note?.replace(/\r\n?/g, '\n').trim()
   if (!trimmed) return undefined
   if (trimmed.length <= MAX_NOTE_LENGTH) return trimmed
-  const suffix = '; …'
+  const suffix = '\n…'
   const head = trimmed.slice(0, MAX_NOTE_LENGTH - suffix.length)
-  const boundary = head.lastIndexOf('; ')
+  const boundary = head.lastIndexOf('\n')
   return (boundary > 0 ? head.slice(0, boundary) : head.trimEnd()) + suffix
 }
 

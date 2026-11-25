@@ -200,6 +200,8 @@
 .tx-detail-list { display: grid; grid-template-columns: 110px minmax(0,1fr); gap: 12px 8px; padding: 16px 0; font-size: 13px; }
 .tx-detail-list dt { color: var(--tx-subtle); }
 .tx-detail-list dd { min-width: 0; margin: 0; color: var(--tx-text); font-weight: 500; overflow-wrap: anywhere; }
+/* Ghi chú hóa đơn: mỗi món một dòng */
+.tx-detail-list dd.tx-detail-note { white-space: pre-line; }
 .tx-category-link { display: inline-flex; align-items: center; max-width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 500; cursor: pointer; text-align: left; text-decoration: underline; text-decoration-color: #cbd5e1; text-underline-offset: 3px; }
 .tx-category-link:hover { color: var(--tx-brand); text-decoration-color: currentColor; }
 .tx-color-dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 2px; }

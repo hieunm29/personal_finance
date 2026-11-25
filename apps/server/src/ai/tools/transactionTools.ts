@@ -38,7 +38,8 @@ export function buildTransactionTools(ctx: ToolContext) {
           maxLength: MAX_NOTE_LENGTH,
           description:
             'Ghi chú ngắn bằng lời của người dùng, ví dụ "Cà phê Highlands". ' +
-            'Hóa đơn mua hàng: "Tên cửa hàng: Món 1 60.000; Món 2 18.900; …" (tối đa 500 ký tự)',
+            'Hóa đơn mua hàng: dòng đầu là tên cửa hàng, mỗi dòng sau một món, ví dụ ' +
+            '"Fujimart\\nĐậu mix hạt 208g: 60.000\\nĐĩa 9 inch: 16.500" (tối đa 500 ký tự)',
         },
       },
       required: ['type', 'amountVnd', 'categoryId'],
