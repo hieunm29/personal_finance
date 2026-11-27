@@ -2,8 +2,29 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // iOS tự phóng to trang khi chạm vào ô nhập có chữ < 16px. Chỉ trên iPhone/iPad/iPod (kể cả iPadOS
+      // tự nhận là MacIntel), thêm maximum-scale=1 để chặn; Android và desktop giữ nguyên viewport gốc.
+      (function () {
+        var isIOS =
+          /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+        if (!isIOS) return
+        var viewport = document.querySelector('meta[name="viewport"]')
+        if (viewport && !/maximum-scale/.test(viewport.content)) {
+          viewport.setAttribute('content', viewport.content + ', maximum-scale=1')
+        }
+      })()
+    </script>
     <title>Personal Finance</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#4f46e5" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Tài chính" />
   </head>
   <body>
     <div id="root"></div>

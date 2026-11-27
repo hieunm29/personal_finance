@@ -2,7 +2,19 @@
 
 ## Trọng tâm Công việc Hiện tại
 **Giai đoạn:** Phase 1 MVP — Budget Planner (US-BUD-01→07) vừa hoàn thành + Dashboard budget integration bug fix.
-**Tiếp theo:** hoàn tất Đợt 1 "dùng được mỗi ngày" — xem mục 2026-11-21 ngay bên dưới.
+**Tiếp theo:** Đợt 2 theo `doc/10.dot2_plan.md` — Bước 1 (PWA) xong, chưa commit; tiếp theo Bước 2 (tin thoại Zalo).
+
+---
+
+## Các Thay đổi Gần đây (2026-11-27) — Đợt 2, Bước 1: PWA (chưa commit)
+- **Kế hoạch Đợt 2:** `doc/10.dot2_plan.md` (PWA → giọng nói → ảnh hóa đơn 7 ngày → thông báo Zalo → sổ chung). `zalo:send-test` đã đạt: bot gửi tin chủ động được.
+- **Đã làm:** `apps/web/public/` (manifest + icon), meta iOS trong `index.html`, đệm safe-area chỉ cộng thêm (`max(cũ, env(...))`), cache tĩnh production qua `middleware/staticCache.ts` (`mountWebDist`), phiên better-auth 30 ngày.
+- **Quyết định:**
+  - Không dùng service worker; tốc độ mở nhờ cache HTTP (`/assets/*` immutable, `index.html`/manifest `no-cache`). File thiếu dưới `/assets/<x>` trả 404, nhưng `/assets` là trang "Tài sản" của SPA nên vẫn rơi về fallback.
+  - Middleware `/api/*` gọi `getSession` với `disableRefresh: true`: chỉ `/api/auth/get-session` gia hạn phiên, vì chỉ ở đó cookie được gửi lại trình duyệt.
+  - iOS: thêm `maximum-scale=1` bằng script chỉ trên iPhone/iPad để chặn tự phóng to ô nhập (ô nhập 13–14px); không đổi cỡ chữ.
+  - Đệm thanh home cho form, hộp xác nhận xóa, khung chi tiết giao dịch; đệm hai bên khi xoay ngang (≤ 860px). Tất cả không đổi gì khi inset = 0 (đã so ảnh chụp trước/sau).
+- **Chưa kiểm tra:** cài thật trên iPhone/Android.
 
 ---
 

@@ -73,7 +73,7 @@
   .txf-modal { max-width: none; border-radius: 20px 20px 0 0; }
   .txf-header { padding: 16px; }
   .txf-body { gap: 16px; padding: 16px; }
-  .txf-footer { padding: 12px 16px; }
+  .txf-footer { padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
   .txf-footer-hint { display: none; }
   .txf-footer .txf-button { flex: 1; padding: 0 8px; }
   .txf-footer .txf-button-ghost { display: none; }

@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
-import { serveStatic } from 'hono/bun'
 import { auth } from './auth'
 import { errorHandler } from './middleware/errorHandler'
+import { mountWebDist } from './middleware/staticCache'
 import { sqlite } from './db'
 
 type Variables = {
@@ -35,7 +35,13 @@ app.route('/webhooks/zalo', createZaloWebhook().route)
 
 // Auth middleware for all other /api/* routes
 app.use('/api/*', async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
+  // disableRefresh: gọi getSession phía server không trả được Set-Cookie về trình duyệt, nên nếu để nó
+  // gia hạn phiên trong DB thì /api/auth/get-session (nơi cookie thật sự được gửi lại) sẽ thấy phiên
+  // "vừa gia hạn" và không làm mới cookie, khiến cookie hết hạn sớm hơn DB. Chỉ /api/auth/get-session gia hạn.
+  const session = await auth.api.getSession({
+    headers: c.req.raw.headers,
+    query: { disableRefresh: true },
+  })
   if (!session) return c.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, 401)
   c.set('userId', session.user.id)
   await next()
@@ -90,10 +96,10 @@ if (process.env.NODE_ENV !== 'test') {
   process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
-// Serve static files in production
+// Serve static files in production.
+// Phải đứng SAU mọi route /api và /webhooks: mountWebDist có handler bắt mọi đường dẫn (SPA fallback).
 if (process.env.NODE_ENV === 'production') {
-  app.use('/*', serveStatic({ root: './apps/web/dist' }))
-  app.get('*', serveStatic({ path: './apps/web/dist/index.html' }))
+  mountWebDist(app, './apps/web/dist')
 }
 
 // Bun native server
